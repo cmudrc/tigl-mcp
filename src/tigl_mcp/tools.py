@@ -1,4 +1,4 @@
-"""Tool definitions for the TiGL MCP scaffold."""
+"""Shared tool definitions for the TiGL MCP project."""
 
 from __future__ import annotations
 
@@ -62,29 +62,3 @@ class ToolDefinition:
         if self.output_schema is not None:
             metadata["output_schema"] = self.output_schema
         return metadata
-
-
-def register_dummy_tool() -> ToolDefinition:
-    """Create a placeholder tool for early testing.
-
-    Returns:
-        ToolDefinition wired to the dummy handler.
-
-    """
-
-    class DummyParameters(ToolParameters):
-        """No-op parameter schema for the dummy tool."""
-
-    def handler(_: dict[str, Any]) -> dict[str, Any]:
-        """Return a static response for smoke testing."""
-        return {
-            "status": "ok",
-            "message": "Dummy tool executed successfully",
-        }
-
-    return ToolDefinition(
-        name="dummy",
-        description="Placeholder tool used while building out MCP plumbing.",
-        parameters_model=DummyParameters,
-        handler=handler,
-    )

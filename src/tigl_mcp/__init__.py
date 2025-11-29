@@ -1,6 +1,5 @@
-"""tigl_mcp package initialization."""
+"""Core data structures shared across the TiGL MCP codebase."""
 
-from tigl_mcp.server import MCPServer
-from tigl_mcp.tools import ToolDefinition, register_dummy_tool
+from tigl_mcp.tools import ToolDefinition, ToolParameters
 
-__all__ = ["MCPServer", "ToolDefinition", "register_dummy_tool"]
+__all__ = ["ToolDefinition", "ToolParameters"]
