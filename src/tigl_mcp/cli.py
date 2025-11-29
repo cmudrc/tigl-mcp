@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-from typing import Any, Dict
 
 from tigl_mcp.server import MCPServer
 from tigl_mcp.tools import register_dummy_tool
@@ -12,7 +11,6 @@ from tigl_mcp.tools import register_dummy_tool
 
 def build_parser() -> argparse.ArgumentParser:
     """Create the argument parser for the CLI."""
-
     parser = argparse.ArgumentParser(description="Run the TiGL MCP scaffold.")
     parser.add_argument(
         "--catalog",
@@ -24,7 +22,6 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     """Entry point for the CLI."""
-
     parser = build_parser()
     args = parser.parse_args(argv)
 

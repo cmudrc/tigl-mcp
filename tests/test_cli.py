@@ -3,16 +3,18 @@
 from __future__ import annotations
 
 import json
-from typing import List
+
+from pytest import CaptureFixture, MonkeyPatch
 
 from tigl_mcp import cli
 
 
-def test_cli_outputs_dummy_tool(monkeypatch, capsys) -> None:  # type: ignore[annotation-unchecked]
+def test_cli_outputs_dummy_tool(
+    monkeypatch: MonkeyPatch, capsys: CaptureFixture[str]
+) -> None:
     """Running the CLI without flags should execute the dummy tool."""
-
     # Arrange
-    argv: List[str] = []
+    argv: list[str] = []
 
     # Act
     exit_code = cli.main(argv)
@@ -25,11 +27,12 @@ def test_cli_outputs_dummy_tool(monkeypatch, capsys) -> None:  # type: ignore[an
     assert parsed["payload"]["status"] == "ok"
 
 
-def test_cli_catalog_flag(monkeypatch, capsys) -> None:  # type: ignore[annotation-unchecked]
+def test_cli_catalog_flag(
+    monkeypatch: MonkeyPatch, capsys: CaptureFixture[str]
+) -> None:
     """Catalog flag should print tool discovery metadata."""
-
     # Arrange
-    argv: List[str] = ["--catalog"]
+    argv: list[str] = ["--catalog"]
 
     # Act
     exit_code = cli.main(argv)

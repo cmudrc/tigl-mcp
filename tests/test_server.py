@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+
 import pytest
 
 from tigl_mcp.server import MCPServer
@@ -14,7 +15,6 @@ class TestMCPServer:
 
     def test_register_and_list_tools(self) -> None:
         """Registers a tool and ensures it appears in the catalog."""
-
         # Arrange
         server = MCPServer()
         dummy = register_dummy_tool()
@@ -30,7 +30,6 @@ class TestMCPServer:
 
     def test_prevents_duplicate_tool_names(self) -> None:
         """Duplicate tool registrations raise a ValueError."""
-
         # Arrange
         server = MCPServer()
         dummy = register_dummy_tool()
@@ -42,7 +41,6 @@ class TestMCPServer:
 
     def test_runs_registered_tool(self) -> None:
         """Executing a registered tool returns its payload."""
-
         # Arrange
         server = MCPServer()
         server.register_tool(register_dummy_tool())
@@ -57,7 +55,6 @@ class TestMCPServer:
 
     def test_running_unknown_tool_errors(self) -> None:
         """Unknown tool invocations raise a KeyError."""
-
         # Arrange
         server = MCPServer()
 
@@ -67,7 +64,6 @@ class TestMCPServer:
 
     def test_rejects_invalid_parameters(self) -> None:
         """Invalid parameters are surfaced as validation errors."""
-
         # Arrange
         server = MCPServer()
         dummy = register_dummy_tool()

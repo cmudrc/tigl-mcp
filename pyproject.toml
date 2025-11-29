@@ -21,6 +21,10 @@ dev = [
   "ruff>=0.6.0",
   "black>=24.8.0",
 ]
+tigl = [
+  "tigl3",
+  "tixi3",
+]
 
 [tool.black]
 line-length = 88
@@ -41,4 +45,5 @@ mypy_path = "src"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--cov=tigl_mcp --cov-report=term-missing"
+addopts = "--cov=tigl_mcp --cov=tigl_mcp_server --cov-report=term-missing"
+pythonpath = ["src"]
