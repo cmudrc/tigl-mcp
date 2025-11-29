@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Callable, Dict
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
@@ -23,14 +24,16 @@ class ToolDefinition:
         description: Human-readable description of the tool purpose.
         parameters_model: Pydantic model used to validate input parameters.
         handler: Callable that executes the tool logic.
+
     """
 
     name: str
     description: str
     parameters_model: type[ToolParameters]
-    handler: Callable[[Dict[str, Any]], Dict[str, Any]]
+    handler: Callable[[dict[str, Any]], dict[str, Any]]
+    output_schema: dict[str, Any] | None = field(default=None)
 
-    def validate(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
+    def validate(self, parameters: dict[str, Any]) -> dict[str, Any]:
         """Validate and coerce incoming tool parameters.
 
         Args:
@@ -41,22 +44,24 @@ class ToolDefinition:
 
         Returns:
             Validated parameter dictionary.
-        """
 
+        """
         try:
             model = self.parameters_model(**parameters)
         except ValidationError as error:
             raise ValueError(f"Invalid parameters for tool '{self.name}'") from error
         return model.model_dump()
 
-    def metadata(self) -> Dict[str, Any]:
+    def metadata(self) -> dict[str, Any]:
         """Return a discovery-friendly description of the tool."""
-
-        return {
+        metadata: dict[str, Any] = {
             "name": self.name,
             "description": self.description,
             "schema": self.parameters_model.model_json_schema(),
         }
+        if self.output_schema is not None:
+            metadata["output_schema"] = self.output_schema
+        return metadata
 
 
 def register_dummy_tool() -> ToolDefinition:
@@ -64,14 +69,14 @@ def register_dummy_tool() -> ToolDefinition:
 
     Returns:
         ToolDefinition wired to the dummy handler.
+
     """
 
     class DummyParameters(ToolParameters):
         """No-op parameter schema for the dummy tool."""
 
-    def handler(_: Dict[str, Any]) -> Dict[str, Any]:
+    def handler(_: dict[str, Any]) -> dict[str, Any]:
         """Return a static response for smoke testing."""
-
         return {
             "status": "ok",
             "message": "Dummy tool executed successfully",
