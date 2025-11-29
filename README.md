@@ -7,7 +7,7 @@ registry used for validation and catalog export.
 
 ## Features
 
-- In-memory `MCPServer` for registering and dispatching tools
+- FastMCP-powered MCP server with stdio and HTTP transports
 - Pydantic-backed parameter validation via reusable tool definitions
 - TiGL/CPACS-aware tool implementations backed by a reusable `SessionManager`
 - JSON-serializable tool definitions for the full geometry workflow
@@ -48,6 +48,15 @@ python -m tigl_mcp_server --catalog
 ```
 
 The catalog is derived from pydantic schemas, and every tool returns structured JSON.
+
+Start the FastMCP server over stdio or HTTP transports:
+
+```bash
+python -m tigl_mcp_server --transport stdio
+
+# or expose websocket/SSE discovery endpoints over HTTP
+python -m tigl_mcp_server --transport http --host 127.0.0.1 --port 8000
+```
 
 ## Contributing
 
