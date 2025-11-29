@@ -45,9 +45,9 @@ def _component_to_dict(component: ComponentDefinition) -> dict[str, object]:
 def get_configuration_summary_tool(session_manager: SessionManager) -> ToolDefinition:
     """Create the get_configuration_summary tool."""
 
-    def handler(raw_params: dict[str, str]) -> dict[str, object]:
+    def handler(raw_params: dict[str, object]) -> dict[str, object]:
         try:
-            params = SessionOnlyParams(**raw_params)
+            params = SessionOnlyParams.model_validate(raw_params)
             _, _, config = require_session(session_manager, params.session_id)
             bounding_box = format_bounding_box(config.bounding_box())
             wings = [
@@ -94,17 +94,16 @@ def list_geometric_components_tool(session_manager: SessionManager) -> ToolDefin
 
     def handler(raw_params: dict[str, object]) -> dict[str, list[dict[str, object]]]:
         try:
-            params = ListComponentsParams(**raw_params)
+            params = ListComponentsParams.model_validate(raw_params)
             _, _, config = require_session(session_manager, params.session_id)
-            components = [
-                _component_to_dict(component)
-                for component in config.all_components()
+            components: list[dict[str, object]] = [
+                _component_to_dict(component) for component in config.all_components()
             ]
             if params.type_filter:
                 components = [
                     component
                     for component in components
-                    if component["type"].lower() == params.type_filter.lower()
+                    if str(component["type"]).lower() == params.type_filter.lower()
                 ]
             for component in components:
                 component.pop("parameters", None)
@@ -130,14 +129,14 @@ def get_component_metadata_tool(session_manager: SessionManager) -> ToolDefiniti
 
     def handler(raw_params: dict[str, object]) -> dict[str, object]:
         try:
-            params = ComponentMetadataParams(**raw_params)
+            params = ComponentMetadataParams.model_validate(raw_params)
             _, _, config = require_session(session_manager, params.session_id)
             component = config.find_component(params.component_uid)
             if component is None:
                 raise_mcp_error(
                     "NotFound", f"Component '{params.component_uid}' not found"
                 )
-            metadata = {
+            metadata: dict[str, object] = {
                 "uid": component.uid,
                 "type": component.type_name,
                 "parent_uid": None,

@@ -38,7 +38,7 @@ def get_wing_summary_tool(session_manager: SessionManager) -> ToolDefinition:
 
     def handler(raw_params: dict[str, object]) -> dict[str, object]:
         try:
-            params = WingSummaryParams(**raw_params)
+            params = WingSummaryParams.model_validate(raw_params)
             _, _, config = require_session(session_manager, params.session_id)
             component = _safe_get_component(config, params.wing_uid, "Wing")
             span = component.parameters.get("span", 20.0 + component.index)
@@ -91,7 +91,7 @@ def get_fuselage_summary_tool(session_manager: SessionManager) -> ToolDefinition
 
     def handler(raw_params: dict[str, object]) -> dict[str, object]:
         try:
-            params = FuselageSummaryParams(**raw_params)
+            params = FuselageSummaryParams.model_validate(raw_params)
             _, _, config = require_session(session_manager, params.session_id)
             component = _safe_get_component(config, params.fuselage_uid, "Fuselage")
             length = component.parameters.get("length", 15.0 + component.index)

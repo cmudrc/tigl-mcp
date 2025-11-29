@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TypedDict
+
 from tigl_mcp_server.cpacs import (
     BoundingBox,
     CPACSConfiguration,
@@ -10,6 +12,17 @@ from tigl_mcp_server.cpacs import (
 )
 from tigl_mcp_server.errors import MCPError, raise_mcp_error
 from tigl_mcp_server.session_manager import SessionManager
+
+
+class BoundingBoxDict(TypedDict):
+    """Dictionary representation of a bounding box."""
+
+    xmin: float
+    xmax: float
+    ymin: float
+    ymax: float
+    zmin: float
+    zmax: float
 
 
 def require_session(
@@ -24,17 +37,16 @@ def require_session(
         raise_mcp_error("SessionError", "Failed to access session", str(exc))
 
 
-def format_bounding_box(box: BoundingBox | dict[str, float]) -> dict[str, float]:
+def format_bounding_box(box: BoundingBox | BoundingBoxDict) -> BoundingBoxDict:
     """Normalize bounding box objects to dictionaries."""
-    if hasattr(box, "xmin"):
-        typed_box = box  # type: ignore[assignment]
+    if isinstance(box, BoundingBox):
         return {
-            "xmin": typed_box.xmin,
-            "xmax": typed_box.xmax,
-            "ymin": typed_box.ymin,
-            "ymax": typed_box.ymax,
-            "zmin": typed_box.zmin,
-            "zmax": typed_box.zmax,
+            "xmin": box.xmin,
+            "xmax": box.xmax,
+            "ymin": box.ymin,
+            "ymax": box.ymax,
+            "zmin": box.zmin,
+            "zmax": box.zmax,
         }
     return {
         "xmin": float(box["xmin"]),

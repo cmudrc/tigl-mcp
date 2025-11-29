@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from tigl_mcp.tools import ToolDefinition, ToolParameters
 from tigl_mcp_server.errors import MCPError, raise_mcp_error
@@ -20,7 +20,7 @@ class SampleSurfaceParams(ToolParameters):
         "wing_segment_eta_xsi",
         "fuselage_segment_eta_xsi",
     ]
-    samples: list[dict[str, object]]
+    samples: list[dict[str, float | int | str | None]]
 
 
 class IntersectPlaneParams(ToolParameters):
@@ -45,9 +45,11 @@ class IntersectComponentsParams(ToolParameters):
 def sample_component_surface_tool(session_manager: SessionManager) -> ToolDefinition:
     """Create the sample_component_surface tool."""
 
-    def handler(raw_params: dict[str, object]) -> dict[str, list[dict[str, float]]]:
+    def handler(
+        raw_params: dict[str, object],
+    ) -> dict[str, list[dict[str, float | str | None]]]:
         try:
-            params = SampleSurfaceParams(**raw_params)
+            params = SampleSurfaceParams.model_validate(raw_params)
             _, _, config = require_session(session_manager, params.session_id)
             component = config.find_component(params.component_uid)
             if component is None:
@@ -57,9 +59,11 @@ def sample_component_surface_tool(session_manager: SessionManager) -> ToolDefini
             bbox = component.bounding_box
             points = []
             for sample in params.samples:
-                eta = float(sample.get("eta", 0.0))
-                xsi = float(sample.get("xsi", 0.0))
+                eta_raw: Any = sample.get("eta", 0.0)
+                xsi_raw: Any = sample.get("xsi", 0.0)
                 side = sample.get("side")
+                eta = float(eta_raw)
+                xsi = float(xsi_raw)
                 x = bbox.xmin + (bbox.xmax - bbox.xmin) * eta
                 y = bbox.ymin + (bbox.ymax - bbox.ymin) * xsi
                 z = bbox.zmin + (bbox.zmax - bbox.zmin) * (eta + xsi) / 2.0
@@ -86,7 +90,7 @@ def intersect_with_plane_tool(session_manager: SessionManager) -> ToolDefinition
 
     def handler(raw_params: dict[str, object]) -> dict[str, list[dict[str, object]]]:
         try:
-            params = IntersectPlaneParams(**raw_params)
+            params = IntersectPlaneParams.model_validate(raw_params)
             _, _, _ = require_session(session_manager, params.session_id)
             curve_points = []
             for index in range(params.n_points_per_curve):
@@ -120,7 +124,7 @@ def intersect_components_tool(session_manager: SessionManager) -> ToolDefinition
 
     def handler(raw_params: dict[str, object]) -> dict[str, list[dict[str, object]]]:
         try:
-            params = IntersectComponentsParams(**raw_params)
+            params = IntersectComponentsParams.model_validate(raw_params)
             _, _, config = require_session(session_manager, params.session_id)
             first = config.find_component(params.component_uid_one)
             second = config.find_component(params.component_uid_two)

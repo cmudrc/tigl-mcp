@@ -176,9 +176,7 @@ def parse_cpacs(xml_content: str) -> CPACSConfiguration:
     )
 
 
-def extract_metadata(
-    xml_content: str, file_name: str | None
-) -> dict[str, str | None]:
+def extract_metadata(xml_content: str, file_name: str | None) -> dict[str, str | None]:
     """Extract common header metadata from CPACS content."""
     root = ET.fromstring(xml_content)
     creator_node = root.find(".//header/creator")
@@ -192,9 +190,7 @@ def extract_metadata(
 
 def build_handles(
     xml_content: str, file_name: str | None
-) -> tuple[
-    TixiDocument, TiglConfiguration, CPACSConfiguration, dict[str, str | None]
-]:
+) -> tuple[TixiDocument, TiglConfiguration, CPACSConfiguration, dict[str, str | None]]:
     """Create TiXI/TiGL stand-ins from XML content."""
     tixi_document = TixiDocument(xml_content=xml_content, file_name=file_name)
     configuration = parse_cpacs(xml_content)

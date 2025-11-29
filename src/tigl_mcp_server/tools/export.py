@@ -32,7 +32,7 @@ def export_component_mesh_tool(session_manager: SessionManager) -> ToolDefinitio
 
     def handler(raw_params: dict[str, object]) -> dict[str, object]:
         try:
-            params = ExportMeshParams(**raw_params)
+            params = ExportMeshParams.model_validate(raw_params)
             _, _, config = require_session(session_manager, params.session_id)
             component = config.find_component(params.component_uid)
             if component is None:
@@ -68,7 +68,7 @@ def export_configuration_cad_tool(session_manager: SessionManager) -> ToolDefini
 
     def handler(raw_params: dict[str, object]) -> dict[str, object]:
         try:
-            params = ExportCadParams(**raw_params)
+            params = ExportCadParams.model_validate(raw_params)
             require_session(session_manager, params.session_id)
             cad_payload = f"cad:{params.format}:{params.session_id}"
             cad_base64 = base64.b64encode(cad_payload.encode("utf-8")).decode("utf-8")

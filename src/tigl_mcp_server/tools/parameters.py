@@ -50,7 +50,7 @@ def get_high_level_parameters_tool(session_manager: SessionManager) -> ToolDefin
 
     def handler(raw_params: dict[str, object]) -> dict[str, object]:
         try:
-            params = GetParametersParams(**raw_params)
+            params = GetParametersParams.model_validate(raw_params)
             _, _, config = require_session(session_manager, params.session_id)
             component = config.find_component(params.component_uid)
             if component is None:
@@ -77,7 +77,7 @@ def set_high_level_parameters_tool(session_manager: SessionManager) -> ToolDefin
 
     def handler(raw_params: dict[str, object]) -> dict[str, object]:
         try:
-            params = SetParametersParams(**raw_params)
+            params = SetParametersParams.model_validate(raw_params)
             _, _, config = require_session(session_manager, params.session_id)
             component = config.find_component(params.component_uid)
             if component is None:

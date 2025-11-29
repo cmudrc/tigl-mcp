@@ -37,9 +37,9 @@ def _read_source(params: OpenCpacsParams) -> tuple[str, str | None]:
 def open_cpacs_tool(session_manager: SessionManager) -> ToolDefinition:
     """Create the open_cpacs tool definition."""
 
-    def handler(raw_params: dict[str, str]) -> dict[str, object]:
+    def handler(raw_params: dict[str, object]) -> dict[str, object]:
         try:
-            params = OpenCpacsParams(**raw_params)
+            params = OpenCpacsParams.model_validate(raw_params)
             xml_content, file_name = _read_source(params)
             tixi_handle = tixi3.tixiOpenDocumentFromString(xml_content)
             tigl_handle = tigl3.tiglOpenCPACSConfiguration(tixi_handle, None)
@@ -78,9 +78,9 @@ def open_cpacs_tool(session_manager: SessionManager) -> ToolDefinition:
 def close_cpacs_tool(session_manager: SessionManager) -> ToolDefinition:
     """Create the close_cpacs tool definition."""
 
-    def handler(raw_params: dict[str, str]) -> dict[str, bool]:
+    def handler(raw_params: dict[str, object]) -> dict[str, bool]:
         try:
-            params = CloseCpacsParams(**raw_params)
+            params = CloseCpacsParams.model_validate(raw_params)
             session_manager.close(params.session_id)
             return {"success": True}
         except MCPError as error:
