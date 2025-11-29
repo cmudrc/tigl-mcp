@@ -27,6 +27,10 @@ tigl = [
   "tixi3",
 ]
 
+[project.scripts]
+tigl-mcp = "tigl_mcp.cli:main"
+tigl-mcp-server = "tigl_mcp_server.main:main"
+
 [tool.black]
 line-length = 88
 target-version = ["py311"]

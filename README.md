@@ -2,8 +2,7 @@
 
 A lightweight scaffold for a Model Context Protocol (MCP) server focused on TiGL. The
 project now includes a standalone `tigl_mcp_server` package that exposes TiGL/CPACS
-geometry through JSON-schema-described tools, alongside the original minimal MCP
-registry used for validation and catalog export.
+geometry through JSON-schema-described tools.
 
 ## Features
 
@@ -12,8 +11,7 @@ registry used for validation and catalog export.
 - TiGL/CPACS-aware tool implementations backed by a reusable `SessionManager`
 - JSON-serializable tool definitions for the full geometry workflow
 - Dummy tool to verify the legacy MCP pipeline end to end
-- CLI for quick manual checks and catalog export (`python -m tigl_mcp`)
-- Server catalog CLI for the new toolset (`python -m tigl_mcp_server --catalog`)
+- CLI for quick manual checks (`python -m tigl_mcp`)
 - Pytest-based test suite with coverage reporting
 
 ## Getting started
@@ -33,29 +31,21 @@ Run the test suite to verify the scaffold:
 pytest
 ```
 
-Inspect the available tools from the command line:
+Run the legacy dummy tool for quick smoke testing:
 
 ```bash
-python -m tigl_mcp.cli --catalog
+python -m tigl_mcp.cli
 ```
 
-Running without flags executes the dummy tool and prints a JSON payload.
-
-Inspect the TiGL MCP server tool catalog:
-
-```bash
-python -m tigl_mcp_server --catalog
-```
-
-The catalog is derived from pydantic schemas, and every tool returns structured JSON.
+The output is a structured JSON document from the dummy handler.
 
 Start the FastMCP server over stdio or HTTP transports:
 
 ```bash
-python -m tigl_mcp_server --transport stdio
+tigl-mcp-server --transport stdio
 
 # or expose websocket/SSE discovery endpoints over HTTP
-python -m tigl_mcp_server --transport http --host 127.0.0.1 --port 8000
+tigl-mcp-server --transport http --host 127.0.0.1 --port 8000 --path /mcp
 ```
 
 ## Contributing

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 from collections.abc import Sequence
 from typing import Any
 
@@ -14,7 +13,6 @@ from tigl_mcp_server.session_manager import session_manager
 def build_parser() -> argparse.ArgumentParser:
     """Create the argument parser for the FastMCP server CLI."""
     parser = argparse.ArgumentParser(description="TiGL MCP server")
-    parser.add_argument("--catalog", action="store_true", help="Print the tool catalog")
     parser.add_argument(
         "--transport",
         choices=("stdio", "http", "sse", "streamable-http"),
@@ -46,19 +44,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Register tools and either print the catalog or start the server."""
+    """Register tools and start the FastMCP server."""
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    app, tool_definitions = build_fastmcp_app(session_manager)
-
-    if args.catalog:
-        print(
-            json.dumps(
-                {tool.name: tool.metadata() for tool in tool_definitions}, indent=2
-            )
-        )
-        return 0
+    app, _tool_definitions = build_fastmcp_app(session_manager)
 
     transport_kwargs: dict[str, Any] = {}
     if args.transport in {"http", "sse", "streamable-http"}:
