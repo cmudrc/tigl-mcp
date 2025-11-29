@@ -28,7 +28,6 @@ tigl = [
 ]
 
 [project.scripts]
-tigl-mcp = "tigl_mcp.cli:main"
 tigl-mcp-server = "tigl_mcp_server.main:main"
 
 [tool.black]

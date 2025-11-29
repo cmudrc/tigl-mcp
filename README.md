@@ -10,8 +10,6 @@ geometry through JSON-schema-described tools.
 - Pydantic-backed parameter validation via reusable tool definitions
 - TiGL/CPACS-aware tool implementations backed by a reusable `SessionManager`
 - JSON-serializable tool definitions for the full geometry workflow
-- Dummy tool to verify the legacy MCP pipeline end to end
-- CLI for quick manual checks (`python -m tigl_mcp`)
 - Pytest-based test suite with coverage reporting
 
 ## Getting started
@@ -30,14 +28,6 @@ Run the test suite to verify the scaffold:
 ```bash
 pytest
 ```
-
-Run the legacy dummy tool for quick smoke testing:
-
-```bash
-python -m tigl_mcp.cli
-```
-
-The output is a structured JSON document from the dummy handler.
 
 Start the FastMCP server over stdio or HTTP transports:
 
