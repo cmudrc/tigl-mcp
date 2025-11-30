@@ -11,6 +11,8 @@ geometry through JSON-schema-described tools.
 - TiGL/CPACS-aware tool implementations backed by a reusable `SessionManager`
 - JSON-serializable tool definitions for the full geometry workflow
 - Pytest-based test suite with coverage reporting
+- Component mesh export supporting STL/VTP/Collada plus SU2 via TiGL or STL
+  conversion
 
 ## Getting started
 
