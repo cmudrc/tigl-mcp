@@ -21,7 +21,10 @@ def _open_session(manager: SessionManager, cpacs_xml: str) -> str:
     tools = build_tools(manager)
     open_tool = _tool_by_name(tools, "open_cpacs")
     result = open_tool.handler({"source_type": "xml_string", "source": cpacs_xml})
-    return result["session_id"]
+    session_id = result["session_id"]
+    if not isinstance(session_id, str):
+        raise AssertionError("Session id must be a string")
+    return session_id
 
 
 def test_export_component_mesh_prefers_tigl_su2(sample_cpacs_xml: str) -> None:
@@ -29,7 +32,7 @@ def test_export_component_mesh_prefers_tigl_su2(sample_cpacs_xml: str) -> None:
     manager = SessionManager()
     session_id = _open_session(manager, sample_cpacs_xml)
     tools = build_tools(manager)
-    tigl_handle, _, _ = manager.get(session_id)
+    _, tigl_handle, _ = manager.get(session_id)
 
     def fake_export(uid: str) -> bytes:
         return f"su2:{uid}".encode()

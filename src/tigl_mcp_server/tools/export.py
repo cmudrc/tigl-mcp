@@ -106,7 +106,7 @@ def export_component_mesh_tool(session_manager: SessionManager) -> ToolDefinitio
     def handler(raw_params: dict[str, object]) -> dict[str, object]:
         try:
             params = ExportMeshParams.model_validate(raw_params)
-            tigl_handle, _, config = require_session(session_manager, params.session_id)
+            _, tigl_handle, config = require_session(session_manager, params.session_id)
             component = config.find_component(params.component_uid)
             if component is None:
                 raise_mcp_error(
