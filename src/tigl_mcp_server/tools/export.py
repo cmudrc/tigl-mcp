@@ -148,8 +148,8 @@ def export_configuration_cad_tool(session_manager: SessionManager) -> ToolDefini
     def handler(raw_params: dict[str, object]) -> dict[str, object]:
         try:
             params = ExportCadParams.model_validate(raw_params)
-            require_session(session_manager, params.session_id)
-            cad_payload = f"cad:{params.format}:{params.session_id}"
+            tixi_handle, _, _ = require_session(session_manager, params.session_id)
+            cad_payload = f"cad:{params.format}:{tixi_handle.xml_content}"
             cad_base64 = base64.b64encode(cad_payload.encode("utf-8")).decode("utf-8")
             return {"format": params.format, "cad_base64": cad_base64}
         except MCPError as error:
