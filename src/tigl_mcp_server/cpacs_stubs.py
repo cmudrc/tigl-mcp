@@ -5,8 +5,10 @@ from __future__ import annotations
 from tigl_mcp_server.cpacs import (
     TiglConfiguration,
     TixiDocument,
-    extract_metadata as cpacs_extract_metadata,
     parse_cpacs,
+)
+from tigl_mcp_server.cpacs import (
+    extract_metadata as cpacs_extract_metadata,
 )
 
 

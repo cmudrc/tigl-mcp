@@ -53,9 +53,7 @@ def open_cpacs_tool(session_manager: SessionManager) -> ToolDefinition:
             }
             return {
                 "session_id": session_id,
-                "cpacs_metadata": cpacs_stubs.extract_metadata(
-                    xml_content, file_name
-                ),
+                "cpacs_metadata": cpacs_stubs.extract_metadata(xml_content, file_name),
                 "configuration_summary": summary,
             }
         except MCPError as error:
