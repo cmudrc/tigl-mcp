@@ -30,19 +30,33 @@ def _open_session(manager: SessionManager, cpacs_xml: str) -> str:
     return session_id
 
 
-def test_export_component_mesh_prefers_tigl_su2(sample_cpacs_xml: str) -> None:
-    """Direct TiGL SU2 export wins when the capability is available."""
+def _minimal_stl(uid: str) -> bytes:
+    return (
+        f"solid {uid}\n"
+        "facet normal 0 0 0\n"
+        "  outer loop\n"
+        "    vertex 0 0 0\n"
+        "    vertex 1 0 0\n"
+        "    vertex 0 1 0\n"
+        "  endloop\n"
+        "endfacet\n"
+        f"endsolid {uid}\n"
+    ).encode("ascii")
+
+
+def test_export_component_mesh_converts_su2_via_meshio(
+    sample_cpacs_xml: str,
+) -> None:
+    """SU2 exports use STL conversion and return real SU2 content."""
     manager = SessionManager()
     session_id = _open_session(manager, sample_cpacs_xml)
     tools = build_tools(manager)
     _, tigl_handle, _ = manager.get(session_id)
 
-    def fake_export(uid: str) -> bytes:
-        return b"NDIME= 3\nNPOIN= 0\n"
-
-    tigl_handle.exportSU2 = fake_export  # type: ignore[attr-defined]
+    tigl_handle.exportComponentSTL = _minimal_stl  # type: ignore[attr-defined]
 
     mesh_tool = _tool_by_name(tools, "export_component_mesh")
+
     result = mesh_tool.handler(
         {
             "session_id": session_id,
@@ -52,7 +66,7 @@ def test_export_component_mesh_prefers_tigl_su2(sample_cpacs_xml: str) -> None:
     )
 
     decoded = base64.b64decode(result["mesh_base64"])
-    assert decoded.startswith(b"NDIME= 3")
+    assert decoded.startswith(b"NDIME=")
 
 
 def test_export_component_mesh_rejects_unsupported_su2(
@@ -72,10 +86,33 @@ def test_export_component_mesh_rejects_unsupported_su2(
                 "component_uid": "W1",
                 "format": "su2",
             }
-        )
+    )
 
     assert "format 'su2' not supported" in str(excinfo.value)
     assert "W1" in str(excinfo.value)
+
+
+def test_export_component_mesh_raises_on_bad_stl(sample_cpacs_xml: str) -> None:
+    """Invalid STL inputs trigger MeshExportError during SU2 conversion."""
+    manager = SessionManager()
+    session_id = _open_session(manager, sample_cpacs_xml)
+    tools = build_tools(manager)
+    _, tigl_handle, _ = manager.get(session_id)
+
+    tigl_handle.exportComponentSTL = lambda uid: b"not-an-stl"  # type: ignore[attr-defined]
+
+    mesh_tool = _tool_by_name(tools, "export_component_mesh")
+
+    with pytest.raises(MCPError) as excinfo:
+        mesh_tool.handler(
+            {
+                "session_id": session_id,
+                "component_uid": "W1",
+                "format": "su2",
+            }
+        )
+
+    assert excinfo.value.error["error"]["type"] == "MeshExportError"
 
 
 def test_export_component_mesh_returns_ascii_stl(sample_cpacs_xml: str) -> None:
