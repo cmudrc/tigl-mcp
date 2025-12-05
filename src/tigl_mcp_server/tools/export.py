@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import tempfile
 import types
+from collections.abc import Iterator
 from typing import Literal, NoReturn
 
 import meshio
@@ -62,7 +63,6 @@ def _ensure_export_supported(
     tigl_handle: TiglConfiguration, mesh_format: MeshFormat, component_uid: str
 ) -> None:
     """Verify requested mesh export format is supported and fail clearly when not."""
-
     supported_native_formats: set[MeshFormat] = {"stl", "vtk", "collada"}
     if mesh_format in supported_native_formats:
         return
@@ -78,7 +78,6 @@ def _export_su2_via_tigl(
     tigl_handle: TiglConfiguration, component: ComponentDefinition
 ) -> bytes:
     """Export SU2 mesh bytes using TiGL STL export combined with meshio conversion."""
-
     try:
         stl_bytes = _coerce_mesh_bytes(
             tigl_handle.exportComponentSTL(component.uid), "STL"  # type: ignore[attr-defined]
@@ -108,7 +107,7 @@ def _export_su2_via_tigl(
                 self.type = cell_type
                 self.data = data
 
-            def __iter__(self):
+            def __iter__(self) -> Iterator[object]:
                 yield self.type
                 yield self.data
 
