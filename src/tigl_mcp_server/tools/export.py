@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import base64
-from collections.abc import Callable
-from typing import Literal, NoReturn
+import tempfile
+import types
+from collections.abc import Iterator, Sized
+from importlib import import_module
+from typing import Any, Literal, NoReturn
 
 from tigl_mcp_server.cpacs import ComponentDefinition, TiglConfiguration
 from tigl_mcp_server.errors import MCPError, raise_mcp_error
@@ -59,17 +62,12 @@ def _ensure_export_supported(
     tigl_handle: TiglConfiguration, mesh_format: MeshFormat, component_uid: str
 ) -> None:
     """Verify requested mesh export format is supported and fail clearly when not."""
-
-    def _has_exporter() -> bool:
-        return any(
-            callable(getattr(tigl_handle, candidate, None))
-            for candidate in ("exportSU2", "exportComponentSU2")
-        )
-
     supported_native_formats: set[MeshFormat] = {"stl", "vtk", "collada"}
     if mesh_format in supported_native_formats:
         return
-    if mesh_format == "su2" and _has_exporter():
+    if mesh_format == "su2" and callable(
+        getattr(tigl_handle, "exportComponentSTL", None)
+    ):
         return
 
     _raise_unsupported_format(mesh_format, component_uid)
@@ -77,27 +75,71 @@ def _ensure_export_supported(
 
 def _export_su2_via_tigl(
     tigl_handle: TiglConfiguration, component: ComponentDefinition
-) -> bytes | None:
-    """Attempt to export SU2 meshes using TiGL if capabilities are present."""
-    exporters: list[Callable[[str], object]] = []
-    for candidate in ("exportSU2", "exportComponentSU2"):
-        maybe_exporter = getattr(tigl_handle, candidate, None)
-        if callable(maybe_exporter):
-            exporters.append(maybe_exporter)
+) -> bytes:
+    """Export SU2 mesh bytes using TiGL STL export combined with meshio conversion."""
+    try:
+        meshio_module: Any = import_module("meshio")
+        stl_bytes = _coerce_mesh_bytes(
+            tigl_handle.exportComponentSTL(component.uid), "STL"  # type: ignore[attr-defined]
+        )
+    except MCPError:
+        raise
+    except Exception as exc:  # pragma: no cover - defensive path
+        raise_mcp_error(
+            "MeshExportError",
+            f"Failed to export STL mesh for '{component.uid}' via TiGL",
+            str(exc),
+        )
 
-    for exporter in exporters:
-        try:
-            return _coerce_mesh_bytes(exporter(component.uid), "SU2")
-        except MCPError:
-            raise
-        except Exception as exc:  # pragma: no cover - defensive path
-            raise_mcp_error(
-                "MeshExportError",
-                f"TiGL failed to export SU2 mesh for '{component.uid}'",
-                str(exc),
-            )
+    if not stl_bytes:
+        raise_mcp_error(
+            "MeshExportError", f"TiGL returned empty STL mesh for '{component.uid}'"
+        )
 
-    return None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".stl") as stl_file:
+            stl_file.write(stl_bytes)
+            stl_file.flush()
+            mesh = meshio_module.read(stl_file.name, file_format="stl")
+
+        class _SU2Cell:
+            def __init__(self, cell_type: str, data: Sized) -> None:
+                self.type = cell_type
+                self.data = data
+
+            def __iter__(self) -> Iterator[object]:
+                yield self.type
+                yield self.data
+
+            def __len__(self) -> int:
+                return len(self.data)
+
+        converted_cells = [_SU2Cell(cell.type, cell.data) for cell in mesh.cells]
+        mesh_to_write = types.SimpleNamespace(
+            points=mesh.points, cells=converted_cells, cell_data=mesh.cell_data
+        )
+
+        with tempfile.NamedTemporaryFile(suffix=".su2") as su2_file:
+            meshio_module.write(su2_file.name, mesh_to_write, file_format="su2")
+            su2_file.flush()
+            su2_file.seek(0)
+            su2_bytes = su2_file.read()
+    except MCPError:
+        raise
+    except Exception as exc:  # pragma: no cover - defensive path
+        raise_mcp_error(
+            "MeshExportError",
+            f"Failed to export SU2 mesh for '{component.uid}' via meshio",
+            str(exc),
+        )
+
+    if not su2_bytes or b"NDIME=" not in su2_bytes:
+        raise_mcp_error(
+            "MeshExportError",
+            f"Conversion to SU2 failed or output invalid for '{component.uid}'",
+        )
+
+    return su2_bytes
 
 
 def _synthetic_mesh_bytes(
@@ -142,10 +184,7 @@ def _export_mesh_bytes(
 ) -> bytes:
     """Export mesh content for the requested format."""
     if mesh_format == "su2":
-        tigl_mesh = _export_su2_via_tigl(tigl_handle, component)
-        if tigl_mesh is not None:
-            return tigl_mesh
-        _raise_unsupported_format(mesh_format, component.uid)
+        return _export_su2_via_tigl(tigl_handle, component)
 
     return _synthetic_mesh_bytes(mesh_format, component)
 
@@ -168,6 +207,12 @@ def _validate_mesh_bytes(
 
     if _looks_like_handle(mesh_bytes):
         _raise_unsupported_format(mesh_format, component.uid)
+
+    if mesh_format == "su2" and b"NDIME=" not in mesh_bytes:
+        raise_mcp_error(
+            "MeshExportError",
+            f"Conversion to SU2 failed or output invalid for '{component.uid}'",
+        )
 
     return mesh_bytes
 

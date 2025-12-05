@@ -12,6 +12,7 @@ requires-python = ">=3.11"
 dependencies = [
   "pydantic>=2.9.0",
   "fastmcp~=2.13.1",
+  "meshio>=5.3",
 ]
 
 [project.optional-dependencies]
