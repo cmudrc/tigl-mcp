@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import base64
 from collections.abc import Callable
-from typing import Literal
+from typing import Literal, NoReturn
 
 from tigl_mcp_server.cpacs import ComponentDefinition, TiglConfiguration
 from tigl_mcp_server.errors import MCPError, raise_mcp_error
@@ -44,7 +44,7 @@ def _coerce_mesh_bytes(raw_mesh: object, format_label: str) -> bytes:
     )
 
 
-def _raise_unsupported_format(mesh_format: MeshFormat, component_uid: str) -> None:
+def _raise_unsupported_format(mesh_format: MeshFormat, component_uid: str) -> NoReturn:
     """Raise a standardized error for unsupported mesh formats."""
     raise_mcp_error(
         "MeshExportError",
