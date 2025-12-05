@@ -5,6 +5,9 @@ from __future__ import annotations
 import base64
 from collections.abc import Iterable
 
+import pytest
+
+from tigl_mcp_server.errors import MCPError
 from tigl_mcp_server.session_manager import SessionManager
 from tigl_mcp_server.tooling import ToolDefinition
 from tigl_mcp_server.tools import build_tools
@@ -35,7 +38,7 @@ def test_export_component_mesh_prefers_tigl_su2(sample_cpacs_xml: str) -> None:
     _, tigl_handle, _ = manager.get(session_id)
 
     def fake_export(uid: str) -> bytes:
-        return f"su2:{uid}".encode()
+        return b"NDIME= 3\nNPOIN= 0\n"
 
     tigl_handle.exportSU2 = fake_export  # type: ignore[attr-defined]
 
@@ -48,12 +51,35 @@ def test_export_component_mesh_prefers_tigl_su2(sample_cpacs_xml: str) -> None:
         }
     )
 
-    decoded = base64.b64decode(result["mesh_base64"]).decode("utf-8")
-    assert decoded == "su2:W1"
+    decoded = base64.b64decode(result["mesh_base64"])
+    assert decoded.startswith(b"NDIME= 3")
 
 
-def test_export_component_mesh_converts_stl_to_su2(sample_cpacs_xml: str) -> None:
-    """STL exports are converted to SU2 when TiGL lacks support."""
+def test_export_component_mesh_rejects_unsupported_su2(
+    sample_cpacs_xml: str,
+) -> None:
+    """SU2 exports fail clearly when TiGL lacks support."""
+    manager = SessionManager()
+    session_id = _open_session(manager, sample_cpacs_xml)
+    tools = build_tools(manager)
+
+    mesh_tool = _tool_by_name(tools, "export_component_mesh")
+
+    with pytest.raises(MCPError) as excinfo:
+        mesh_tool.handler(
+            {
+                "session_id": session_id,
+                "component_uid": "W1",
+                "format": "su2",
+            }
+        )
+
+    assert "format 'su2' not supported" in str(excinfo.value)
+    assert "W1" in str(excinfo.value)
+
+
+def test_export_component_mesh_returns_ascii_stl(sample_cpacs_xml: str) -> None:
+    """STL exports return format-like payloads, not handles."""
     manager = SessionManager()
     session_id = _open_session(manager, sample_cpacs_xml)
     tools = build_tools(manager)
@@ -63,10 +89,10 @@ def test_export_component_mesh_converts_stl_to_su2(sample_cpacs_xml: str) -> Non
         {
             "session_id": session_id,
             "component_uid": "W1",
-            "format": "su2",
+            "format": "stl",
         }
     )
 
-    decoded = base64.b64decode(result["mesh_base64"]).decode("utf-8")
-    assert decoded.startswith("su2-from-stl:W1:")
-    assert "mesh:stl:W1" in decoded
+    mesh_bytes = base64.b64decode(result["mesh_base64"])
+    assert mesh_bytes.startswith(b"solid W1")
+    assert b"vertex" in mesh_bytes

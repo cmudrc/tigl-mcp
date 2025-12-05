@@ -141,7 +141,7 @@ async def test_fastmcp_server_exposes_all_tool_endpoints(
             },
         )
         mesh_bytes = base64.b64decode(mesh_export.data["mesh_base64"])
-        assert mesh_bytes.startswith(b"mesh:stl")
+        assert mesh_bytes.startswith(b"solid W1")
 
         cad_export = await client.call_tool(
             "export_configuration_cad", {"session_id": session_id, "format": "iges"}

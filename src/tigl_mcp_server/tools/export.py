@@ -39,8 +39,31 @@ def _coerce_mesh_bytes(raw_mesh: object, format_label: str) -> bytes:
         return raw_mesh.encode("utf-8")
     raise_mcp_error(
         "MeshExportError",
-        f"TiGL returned unsupported {format_label} mesh content of type"
+        f"TiGL returned unsupported {format_label} mesh content of type",
         f" {type(raw_mesh)}",
+    )
+
+
+def _ensure_export_supported(
+    tigl_handle: TiglConfiguration, mesh_format: MeshFormat, component_uid: str
+) -> None:
+    """Verify requested mesh export format is supported and fail clearly when not."""
+
+    def _has_exporter() -> bool:
+        return any(
+            callable(getattr(tigl_handle, candidate, None))
+            for candidate in ("exportSU2", "exportComponentSU2")
+        )
+
+    supported_native_formats: set[MeshFormat] = {"stl", "vtk", "collada"}
+    if mesh_format in supported_native_formats:
+        return
+    if mesh_format == "su2" and _has_exporter():
+        return
+
+    raise_mcp_error(
+        "MeshExportError",
+        f"Mesh export failed: format '{mesh_format}' not supported for component {component_uid}.",
     )
 
 
@@ -69,18 +92,42 @@ def _export_su2_via_tigl(
     return None
 
 
-def _convert_stl_to_su2(stl_mesh: bytes, component: ComponentDefinition) -> bytes:
-    """Convert STL mesh content into a simple SU2 representation."""
-    prefix = f"su2-from-stl:{component.uid}:".encode()
-    return prefix + stl_mesh
-
-
 def _synthetic_mesh_bytes(
     mesh_format: MeshFormat, component: ComponentDefinition
 ) -> bytes:
-    """Generate deterministic mesh payloads for non-SU2 formats."""
-    mesh_payload = f"mesh:{mesh_format}:{component.uid}"
-    return mesh_payload.encode("utf-8")
+    """Generate deterministic, format-like mesh payloads for supported formats."""
+    if mesh_format == "stl":
+        return (
+            f"solid {component.uid}\n"
+            "  facet normal 0 0 0\n"
+            "    outer loop\n"
+            "      vertex 0 0 0\n"
+            "      vertex 0 1 0\n"
+            "      vertex 1 0 0\n"
+            "    endloop\n"
+            "  endfacet\n"
+            f"endsolid {component.uid}\n"
+        ).encode("ascii")
+    if mesh_format == "vtk":
+        return (
+            "# vtk DataFile Version 3.0\n"
+            f"component {component.uid}\n"
+            "ASCII\n"
+            "DATASET POLYDATA\n"
+            "POINTS 0 float\n"
+        ).encode("ascii")
+    if mesh_format == "collada":
+        return (
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+            "<COLLADA><asset/><library_geometries>"
+            f"<geometry id=\"{component.uid}\" name=\"{component.uid}\"/>"
+            "</library_geometries></COLLADA>"
+        ).encode("utf-8")
+
+    raise_mcp_error(
+        "MeshExportError",
+        f"Mesh export failed: format '{mesh_format}' not supported for component {component.uid}.",
+    )
 
 
 def _export_mesh_bytes(
@@ -93,11 +140,40 @@ def _export_mesh_bytes(
         tigl_mesh = _export_su2_via_tigl(tigl_handle, component)
         if tigl_mesh is not None:
             return tigl_mesh
-
-        stl_mesh = _synthetic_mesh_bytes("stl", component)
-        return _convert_stl_to_su2(stl_mesh, component)
+        raise_mcp_error(
+            "MeshExportError",
+            f"Mesh export failed: format '{mesh_format}' not supported for component {component.uid}.",
+        )
 
     return _synthetic_mesh_bytes(mesh_format, component)
+
+
+def _looks_like_handle(mesh_bytes: bytes) -> bool:
+    """Detect legacy handle payloads masquerading as mesh bytes."""
+    try:
+        mesh_text = mesh_bytes.decode("ascii")
+    except UnicodeDecodeError:
+        return False
+    return mesh_text.startswith("mesh:") or mesh_text.startswith("su2-from-stl:")
+
+
+def _validate_mesh_bytes(
+    mesh_bytes: bytes, mesh_format: MeshFormat, component: ComponentDefinition
+) -> bytes:
+    """Ensure exported mesh payloads are real, non-empty bytes."""
+    if mesh_bytes is None or len(mesh_bytes) == 0:
+        raise_mcp_error(
+            "MeshExportError",
+            f"Mesh export failed: format '{mesh_format}' not supported for component {component.uid}.",
+        )
+
+    if _looks_like_handle(mesh_bytes):
+        raise_mcp_error(
+            "MeshExportError",
+            f"Mesh export failed: format '{mesh_format}' not supported for component {component.uid}.",
+        )
+
+    return mesh_bytes
 
 
 def export_component_mesh_tool(session_manager: SessionManager) -> ToolDefinition:
@@ -113,12 +189,19 @@ def export_component_mesh_tool(session_manager: SessionManager) -> ToolDefinitio
                     "NotFound", f"Component '{params.component_uid}' not found"
                 )
 
+            _ensure_export_supported(
+                tigl_handle=tigl_handle,
+                mesh_format=params.format,
+                component_uid=params.component_uid,
+            )
             mesh_bytes = _export_mesh_bytes(
                 tigl_handle=tigl_handle,
                 component=component,
                 mesh_format=params.format,
             )
-            mesh_base64 = base64.b64encode(mesh_bytes).decode("utf-8")
+            validated_mesh = _validate_mesh_bytes(mesh_bytes, params.format, component)
+            # mesh_base64 is reserved for mesh bytes only.
+            mesh_base64 = base64.b64encode(validated_mesh).decode("utf-8")
 
             return {
                 "format": params.format,
