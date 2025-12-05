@@ -22,10 +22,6 @@ dev = [
   "ruff>=0.6.0",
   "black>=24.8.0",
 ]
-tigl = [
-  "tigl3",
-  "tixi3",
-]
 
 [project.scripts]
 tigl-mcp-server = "tigl_mcp_server.main:main"
@@ -54,3 +50,10 @@ mypy_path = "src"
 testpaths = ["tests"]
 addopts = "--cov=tigl_mcp_server --cov-report=term-missing"
 pythonpath = ["src"]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["tigl_mcp_server*"]

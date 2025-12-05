@@ -5,8 +5,7 @@ from __future__ import annotations
 import pathlib
 from typing import Literal
 
-import tigl3
-import tixi3
+from tigl_mcp_server import cpacs_stubs
 from tigl_mcp_server.errors import MCPError, raise_mcp_error
 from tigl_mcp_server.session_manager import SessionManager
 from tigl_mcp_server.tooling import ToolDefinition, ToolParameters
@@ -41,8 +40,8 @@ def open_cpacs_tool(session_manager: SessionManager) -> ToolDefinition:
         try:
             params = OpenCpacsParams.model_validate(raw_params)
             xml_content, file_name = _read_source(params)
-            tixi_handle = tixi3.tixiOpenDocumentFromString(xml_content)
-            tigl_handle = tigl3.tiglOpenCPACSConfiguration(tixi_handle, None)
+            tixi_handle = cpacs_stubs.tixiOpenDocumentFromString(xml_content)
+            tigl_handle = cpacs_stubs.tiglOpenCPACSConfiguration(tixi_handle, None)
             session_id = session_manager.create_session(
                 tixi_handle, tigl_handle, tigl_handle.cpacs_configuration
             )
@@ -54,7 +53,9 @@ def open_cpacs_tool(session_manager: SessionManager) -> ToolDefinition:
             }
             return {
                 "session_id": session_id,
-                "cpacs_metadata": tixi3.extract_metadata(xml_content, file_name),
+                "cpacs_metadata": cpacs_stubs.extract_metadata(
+                    xml_content, file_name
+                ),
                 "configuration_summary": summary,
             }
         except MCPError as error:
