@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from tigl_mcp.tools import ToolDefinition, ToolParameters
 from tigl_mcp_server.errors import MCPError, raise_mcp_error
 from tigl_mcp_server.session_manager import SessionManager
+from tigl_mcp_server.tooling import ToolDefinition, ToolParameters
 from tigl_mcp_server.tools.common import require_session
 
 

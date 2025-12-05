@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from tigl_mcp.tools import ToolDefinition
 from tigl_mcp_server.session_manager import SessionManager
+from tigl_mcp_server.tooling import ToolDefinition
 from tigl_mcp_server.tools.configuration import (
     get_component_metadata_tool,
     get_configuration_summary_tool,

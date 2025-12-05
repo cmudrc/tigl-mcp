@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import base64
 
-from tigl_mcp.tools import ToolDefinition
 from tigl_mcp_server.session_manager import SessionManager
+from tigl_mcp_server.tooling import ToolDefinition
 from tigl_mcp_server.tools import build_tools
 
 

@@ -36,6 +36,8 @@ target-version = ["py311"]
 
 [tool.ruff]
 line-length = 88
+
+[tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "ANN", "C4", "D"]
 ignore = ["D203", "D213"]
 
@@ -50,5 +52,5 @@ mypy_path = "src"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--cov=tigl_mcp --cov=tigl_mcp_server --cov-report=term-missing"
+addopts = "--cov=tigl_mcp_server --cov-report=term-missing"
 pythonpath = ["src"]

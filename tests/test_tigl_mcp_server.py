@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from tigl_mcp.tools import ToolDefinition
 from tigl_mcp_server.errors import MCPError
 from tigl_mcp_server.session_manager import SessionManager
+from tigl_mcp_server.tooling import ToolDefinition
 from tigl_mcp_server.tools import build_tools
 from tigl_mcp_server.tools.parameters import set_high_level_parameters_tool
 

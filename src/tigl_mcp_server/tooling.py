@@ -1,4 +1,4 @@
-"""Shared tool definitions for the TiGL MCP project."""
+"""Shared tool definitions for the TiGL MCP server."""
 
 from __future__ import annotations
 

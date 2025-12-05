@@ -1,8 +1,10 @@
 # tigl-mcp
 
 A lightweight scaffold for a Model Context Protocol (MCP) server focused on TiGL. The
-project now includes a standalone `tigl_mcp_server` package that exposes TiGL/CPACS
-geometry through JSON-schema-described tools.
+project now exposes its core tooling primitives from the consolidated
+`tigl_mcp_server` package, which also provides the `tigl-mcp-server` CLI and
+`python -m tigl_mcp_server` entry point for running the server. TiGL/CPACS
+geometry is exposed through JSON-schema-described tools.
 
 ## Features
 
