@@ -8,7 +8,17 @@ import types
 from collections.abc import Iterator, Sized
 from importlib import import_module
 from typing import Any, Literal, NoReturn
-
+from pathlib import Path
+import subprocess
+import os
+import sys
+# Optional dependency: tigl3 bindings exist in the TiGL container, but may be absent locally.
+try:
+    from tigl3.import_export_helper import export_shapes  # type: ignore
+    from tigl3.exports import create_exporter  # type: ignore
+except Exception:
+    export_shapes = None  # type: ignore
+    create_exporter = None  # type: ignore
 from tigl_mcp_server.cpacs import ComponentDefinition, TiglConfiguration
 from tigl_mcp_server.errors import MCPError, raise_mcp_error
 from tigl_mcp_server.session_manager import SessionManager
@@ -32,6 +42,130 @@ class ExportCadParams(ToolParameters):
 
     session_id: str
     format: Literal["step", "iges"]
+
+
+def _export_step_file_dynamic(tigl_handle: Any, component_uid: str, step_path: Path) -> None:
+    """
+    Export STEP by calling whatever TiGL export API exists.
+    Many TiGL APIs use exportConfiguration/exportComponent where file extension selects format.
+    """
+    # Let exporter create the file (safer)
+    step_path.unlink(missing_ok=True)
+
+    # Collect export-like callables
+    exportish = []
+    for name in dir(tigl_handle):
+        if "export" in name.lower():
+            fn = getattr(tigl_handle, name, None)
+            if callable(fn):
+                exportish.append((name, fn))
+
+    # Prefer component exports first (if available)
+    comp_candidates = [(n, f) for (n, f) in exportish if "exportcomponent" in n.lower()]
+    conf_candidates = [(n, f) for (n, f) in exportish if "exportconfiguration" in n.lower() or n.lower() == "export"]
+
+    errors = []
+
+    # 1) Try exportComponent(uid, filename, deflection) / variations
+    for name, fn in comp_candidates:
+        try:
+            try:
+                fn(component_uid, str(step_path), 0.001)
+            except TypeError:
+                try:
+                    fn(component_uid, str(step_path))
+                except TypeError:
+                    fn(str(step_path), component_uid, 0.001)
+
+            if step_path.exists() and step_path.stat().st_size > 0:
+                return
+        except Exception as e:
+            errors.append(f"{name}: {type(e).__name__}: {e}")
+
+    # 2) Fallback: exportConfiguration(filename, fuseAllShapes, deflection) / variations
+    # Note: this exports the whole aircraft, not just one component — but it unblocks the pipeline.
+    for name, fn in conf_candidates:
+        try:
+            try:
+                fn(str(step_path), False, 0.001)
+            except TypeError:
+                try:
+                    fn(str(step_path), False)
+                except TypeError:
+                    fn(str(step_path))
+
+            if step_path.exists() and step_path.stat().st_size > 0:
+                return
+        except Exception as e:
+            errors.append(f"{name}: {type(e).__name__}: {e}")
+
+    # If still nothing worked, raise with visibility
+    export_names = [n for (n, _) in exportish]
+    raise_mcp_error(
+        "MeshExportError",
+        "No usable TiGL STEP export method found on TiglConfiguration.",
+        {
+            "export_like_methods": export_names,
+            "attempt_errors": errors[:10],
+        },
+    )
+
+
+def _step_to_stl_bytes(step_path: Path) -> bytes:
+    with tempfile.NamedTemporaryFile(suffix=".stl", delete=False) as f:
+        stl_path = Path(f.name)
+
+    try:
+        stl_path.unlink(missing_ok=True)
+        cmd = ["gmsh", str(step_path), "-2", "-format", "stl", "-o", str(stl_path)]
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        if proc.returncode != 0:
+            raise_mcp_error("MeshExportError", "gmsh failed converting STEP->STL", proc.stdout + "\n" + proc.stderr)
+
+        return stl_path.read_bytes()
+    finally:
+        stl_path.unlink(missing_ok=True)
+
+
+
+
+def _export_real_stl_bytes(tigl_handle: Any, component: ComponentDefinition) -> bytes:
+    """
+    Preferred path:
+      Use TiGL meshed STL exporters (by UID) via _export_stl_bytes_via_tigl3.
+
+    Optional fallback (can enable later):
+      STEP -> gmsh -> STL (only if STEP export is known-good for the component)
+    """
+    if os.environ.get("TIGL_MCP_DEBUG_EXPORTS") == "1":
+        keys = ("export", "step", "iges", "stp", "stl", "write", "save", "mesh")
+        methods = [n for n in dir(tigl_handle) if any(k in n.lower() for k in keys)]
+        print(f"[tigl-mcp][debug] tigl_handle export-ish methods: {methods}", file=sys.stderr, flush=True)
+
+    errors: list[str] = []
+
+    # 1) Preferred: meshed STL by UID (wings/fuselage) or meshed geometry STL fallback
+    try:
+        stl_bytes = _export_stl_bytes_via_tigl3(tigl_handle, component)
+        if len(stl_bytes) >= 2048:
+            return stl_bytes
+        errors.append(f"shape->stl too small ({len(stl_bytes)} B)")
+    except Exception as e:
+        errors.append(f"shape->stl failed: {type(e).__name__}: {e}")
+
+    # 2) Optional STEP fallback: disable for now to avoid wrong UID/exportComponent issues
+    # If you want to keep it, we should inspect _export_step_file_dynamic first.
+
+    raise_mcp_error(
+        "MeshExportError",
+        "No working STL export route found.",
+        " | ".join(errors[:10]),
+    )
+
+
+
+
+
 
 
 def _coerce_mesh_bytes(raw_mesh: object, format_label: str) -> bytes:
@@ -75,9 +209,7 @@ def _export_su2_via_tigl(
     """Export SU2 mesh bytes using TiGL STL export combined with meshio conversion."""
     try:
         meshio_module: Any = import_module("meshio")
-        stl_bytes = _coerce_mesh_bytes(
-            tigl_handle.exportComponentSTL(component.uid), "STL"  # type: ignore[attr-defined]
-        )
+        stl_bytes = _export_stl_bytes_via_tigl3(tigl_handle, component)
     except MCPError:
         raise
     except Exception as exc:  # pragma: no cover - defensive path
@@ -173,16 +305,18 @@ def _synthetic_mesh_bytes(
     _raise_unsupported_format(mesh_format, component.uid)
 
 
-def _export_mesh_bytes(
-    tigl_handle: TiglConfiguration,
-    component: ComponentDefinition,
-    mesh_format: MeshFormat,
-) -> bytes:
+
+
+def _export_mesh_bytes(tigl_handle: TiglConfiguration, component: ComponentDefinition, mesh_format: MeshFormat) -> bytes:
     """Export mesh content for the requested format."""
     if mesh_format == "su2":
         return _export_su2_via_tigl(tigl_handle, component)
 
+    if mesh_format == "stl":
+        return _export_real_stl_bytes(tigl_handle, component)
+
     return _synthetic_mesh_bytes(mesh_format, component)
+
 
 
 def _looks_like_handle(mesh_bytes: bytes) -> bool:
@@ -220,17 +354,31 @@ def export_component_mesh_tool(session_manager: SessionManager) -> ToolDefinitio
         try:
             params = ExportMeshParams.model_validate(raw_params)
             _, tigl_handle, config = require_session(session_manager, params.session_id)
+            # DEBUG: print available export-ish methods on tigl_handle (once) 
+            if os.environ.get("TIGL_MCP_DEBUG_EXPORTS") == "1":
+                keys = ("export", "step", "iges", "stp", "stl", "write", "save", "mesh")
+                methods = [n for n in dir(tigl_handle) if any(k in n.lower() for k in keys)]
+                print(f"[tigl-mcp][debug] tigl_handle export-ish methods: {methods}", file=sys.stderr, flush=True)
             component = config.find_component(params.component_uid)
+
+            # If user passed a TiGL UID, map it back to our parsed component by tigl_uid
             if component is None:
-                raise_mcp_error(
-                    "NotFound", f"Component '{params.component_uid}' not found"
-                )
+                for c in config.all_components():
+                    if c.parameters.get("tigl_uid") == params.component_uid:
+                        component = c
+                        break
+
+            if component is None:
+                raise_mcp_error("NotFound", f"Component '{params.component_uid}' not found")
+
 
             _ensure_export_supported(
                 tigl_handle=tigl_handle,
                 mesh_format=params.format,
                 component_uid=params.component_uid,
             )
+            if os.environ.get("TIGL_MCP_DEBUG_EXPORTS") == "1":
+                print(f"[tigl-mcp][debug] tigl_handle type={type(tigl_handle)} repr={tigl_handle!r}", file=sys.stderr)
             mesh_bytes = _export_mesh_bytes(
                 tigl_handle=tigl_handle,
                 component=component,
@@ -286,3 +434,163 @@ def export_configuration_cad_tool(session_manager: SessionManager) -> ToolDefini
         handler=handler,
         output_schema={},
     )
+
+def _get_aircraft_config(tigl_handle: object):
+    # TiGL Python API: configuration manager -> configuration
+    from tigl3.configuration import CCPACSConfigurationManager_get_instance
+    mgr = CCPACSConfigurationManager_get_instance()
+    return mgr.get_configuration(int(tigl_handle))
+
+def _get_loft_shape(tigl_handle: object, component_uid: str):
+    cfg = _get_aircraft_config(tigl_handle)
+    uid_mgr = cfg.get_uidmanager()
+    comp = uid_mgr.get_geometric_component(component_uid)
+    return comp.get_loft()  # returns a TiGL shape object
+
+def _require_tigl3() -> None:
+    if export_shapes is None or create_exporter is None:
+        raise_mcp_error(
+            "DependencyMissing",
+            "tigl3 (TiGL Python bindings) is not installed in this environment.",
+            "Run the server inside the TiGL-enabled Docker image, or install TiGL/tigl3 locally.",
+        )
+
+def _export_shape_to_stl_bytes(tigl_handle: object, component_uid: str) -> bytes:
+    _require_tigl3()
+    shape = _get_loft_shape(tigl_handle, component_uid)
+
+    # Best path: helper that exports based on filename extension
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".stl", delete=False) as f:
+            out = Path(f.name)
+        try:
+            export_shapes([shape], str(out), deflection=0.001)
+            return out.read_bytes()
+        finally:
+            out.unlink(missing_ok=True)
+    except ImportError:
+        pass  # fallback below
+
+    # Fallback: explicit exporter
+
+    exporter = create_exporter("stl")
+    exporter.add_shape(shape)
+    with tempfile.NamedTemporaryFile(suffix=".stl", delete=False) as f:
+        out = Path(f.name)
+    try:
+        exporter.write(str(out))
+        return out.read_bytes()
+    finally:
+        out.unlink(missing_ok=True)
+
+def _uid_candidates(component: ComponentDefinition) -> list[str]:
+    tigl_uid = component.parameters.get("tigl_uid") if component.parameters else None
+    if isinstance(tigl_uid, str) and tigl_uid:
+        return [tigl_uid]
+
+    u = component.uid
+    cands = [u, u.replace("_",""), u.replace("_","").title()]
+    seen=set(); out=[]
+    for x in cands:
+        if x and x not in seen:
+            seen.add(x); out.append(x)
+    return out
+
+
+
+def _export_stl_bytes_via_tigl3(tigl: Any, component: ComponentDefinition) -> bytes:
+    """
+    Export a real STL using tigl3wrapper.Tigl3 methods.
+
+    Tries:
+      - Wing/Fuselage by UID (with/without deflection)
+      - Wing/Fuselage by Index (with/without deflection)
+      - Whole geometry STL fallback
+    """
+    with tempfile.NamedTemporaryFile(suffix=".stl", delete=False) as f:
+        stl_path = Path(f.name)
+
+    errors: list[str] = []
+    tried: list[tuple[str, tuple[object, ...]]] = []
+
+    def _try(method: str, *args: object) -> bytes | None:
+        fn = getattr(tigl, method, None)
+        if not callable(fn):
+            return None
+        tried.append((method, args))
+        try:
+            stl_path.unlink(missing_ok=True)
+            fn(*args)
+            if stl_path.exists() and stl_path.stat().st_size > 2048:
+                return stl_path.read_bytes()
+            # if it wrote something tiny, record it
+            if stl_path.exists():
+                errors.append(f"{method}{args} wrote {stl_path.stat().st_size} bytes (too small)")
+            else:
+                errors.append(f"{method}{args} produced no file")
+        except Exception as e:
+            errors.append(f"{method}{args} {type(e).__name__}: {e}")
+        return None
+
+    try:
+        ctype = (component.type_name or "").lower()
+        uid_list = _uid_candidates(component)
+        idx = int(component.index)
+
+        # Reasonable default deflection (triangulation fineness)
+        defl = float(os.environ.get("TIGL_STL_DEFLECTION", "0.001"))
+
+        if "wing" in ctype:
+            for uid in uid_list:
+                for candidate in [
+                    ("exportMeshedWingSTLByUID", (uid, str(stl_path), defl)),
+                    ("exportMeshedWingSTLByUID", (uid, str(stl_path))),
+                ]:
+                    out = _try(candidate[0], *candidate[1])
+                    if out is not None:
+                        return out
+
+            # by-index (often exists in TiGL)
+            for candidate in [
+                ("exportMeshedWingSTL", (idx, str(stl_path), defl)),
+                ("exportMeshedWingSTL", (idx, str(stl_path))),
+            ]:
+                out = _try(candidate[0], *candidate[1])
+                if out is not None:
+                    return out
+
+        if "fuselage" in ctype:
+            for uid in uid_list:
+                for candidate in [
+                    ("exportMeshedFuselageSTLByUID", (uid, str(stl_path), defl)),
+                    ("exportMeshedFuselageSTLByUID", (uid, str(stl_path))),
+                ]:
+                    out = _try(candidate[0], *candidate[1])
+                    if out is not None:
+                        return out
+
+            for candidate in [
+                ("exportMeshedFuselageSTL", (idx, str(stl_path), defl)),
+                ("exportMeshedFuselageSTL", (idx, str(stl_path))),
+            ]:
+                out = _try(candidate[0], *candidate[1])
+                if out is not None:
+                    return out
+
+        # Whole-aircraft fallback
+        for candidate in [
+            ("exportMeshedGeometrySTL", (str(stl_path), defl)),
+            ("exportMeshedGeometrySTL", (str(stl_path),)),
+        ]:
+            out = _try(candidate[0], *candidate[1])
+            if out is not None:
+                return out
+
+        raise_mcp_error(
+            "MeshExportError",
+            "No working STL export route found.",
+            {"errors": errors[:20]},
+        )
+
+    finally:
+        stl_path.unlink(missing_ok=True)

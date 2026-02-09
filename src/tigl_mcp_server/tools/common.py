@@ -2,14 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TypedDict
-
-from tigl_mcp_server.cpacs import (
-    BoundingBox,
-    CPACSConfiguration,
-    TiglConfiguration,
-    TixiDocument,
-)
+from typing import Any,TypedDict
+from tigl_mcp_server.cpacs import BoundingBox, CPACSConfiguration
 from tigl_mcp_server.errors import MCPError, raise_mcp_error
 from tigl_mcp_server.session_manager import SessionManager
 
@@ -25,12 +19,11 @@ class BoundingBoxDict(TypedDict):
     zmax: float
 
 
-def require_session(
-    session_manager: SessionManager, session_id: str
-) -> tuple[TixiDocument, TiglConfiguration, CPACSConfiguration]:
+def require_session(session_manager: SessionManager, session_id: str) -> tuple[Any, Any, CPACSConfiguration]:
     """Retrieve a session or raise an MCP-friendly error."""
     try:
-        return session_manager.get(session_id)
+        data = session_manager.get(session_id)
+        return data.tixi_handle, data.tigl_handle, data.config
     except MCPError:
         raise
     except Exception as exc:  # pragma: no cover - defensive path
