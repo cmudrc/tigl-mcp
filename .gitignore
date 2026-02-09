@@ -205,3 +205,38 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+.DS_Store
+.DS_Store
+
+# macOS
+.DS_Store
+
+# Generated meshes
+*.stl
+
+# Local run artifacts
+server.pid
+stdout.log
+stderr.log
+
+# macOS
+.DS_Store
+
+# Generated meshes
+*.stl
+
+# Local run artifacts
+server.pid
+stdout.log
+stderr.log
+
+# macOS
+.DS_Store
+
+# Generated meshes
+*.stl
+
+# Local run artifacts
+server.pid
+stdout.log
+stderr.log

@@ -3,12 +3,20 @@
 from __future__ import annotations
 
 import pathlib
-from typing import Literal
+from typing import Any, Literal
 
 from tigl_mcp_server import cpacs_stubs
+from tigl_mcp_server.cpacs import parse_cpacs
 from tigl_mcp_server.errors import MCPError, raise_mcp_error
 from tigl_mcp_server.session_manager import SessionManager
 from tigl_mcp_server.tooling import ToolDefinition, ToolParameters
+
+try:  # real bindings (preferred)
+    from tixi3 import tixi3wrapper
+    from tigl3 import tigl3wrapper
+except Exception:  # pragma: no cover
+    tixi3wrapper = None  # type: ignore[assignment]
+    tigl3wrapper = None  # type: ignore[assignment]
 
 
 class OpenCpacsParams(ToolParameters):
@@ -36,21 +44,69 @@ def _read_source(params: OpenCpacsParams) -> tuple[str, str | None]:
 def open_cpacs_tool(session_manager: SessionManager) -> ToolDefinition:
     """Create the open_cpacs tool definition."""
 
+    def _open_real_cpacs_from_xml(xml_content: str):
+
+        tixi = tixi3wrapper.Tixi3()
+
+        # tixi3 supports openString in your container (you already verified this)
+        if hasattr(tixi, "openString"):
+            tixi.openString(xml_content)
+        elif hasattr(tixi, "openDocumentFromString"):
+            tixi.openDocumentFromString(xml_content)
+        else:
+            raise RuntimeError("No supported TIXI open-from-string API found")
+
+        tigl = tigl3wrapper.Tigl3()
+        # your test showed this works:
+        tigl.open(tixi, "")
+
+        return tixi, tigl
+
+    
     def handler(raw_params: dict[str, object]) -> dict[str, object]:
         try:
             params = OpenCpacsParams.model_validate(raw_params)
-            xml_content, file_name = _read_source(params)
-            tixi_handle = cpacs_stubs.tixiOpenDocumentFromString(xml_content)
-            tigl_handle = cpacs_stubs.tiglOpenCPACSConfiguration(tixi_handle, None)
-            session_id = session_manager.create_session(
-                tixi_handle, tigl_handle, tigl_handle.cpacs_configuration
-            )
+            if params.source_type == "path":
+                path = pathlib.Path(params.source)
+                if not path.exists():
+                    raise_mcp_error("InvalidInput", f"File not found: {path}")
+                xml_content = path.read_text(encoding="utf-8")
+                file_name = str(path)
+            else:
+                xml_content = params.source
+                file_name = None
+
+            if tixi3wrapper is None or tigl3wrapper is None:
+                raise_mcp_error(
+                    "OpenError",
+                    "Real tigl3/tixi3 bindings not available.",
+                    "Run inside the Docker image that contains tigl3/tixi3.",
+                )
+
+            # Open CPACS in-memory (avoids host/container path issues)
+            tixi_handle: Any = tixi3wrapper.Tixi3()
+            if hasattr(tixi_handle, "openString"):
+                tixi_handle.openString(xml_content)
+            elif hasattr(tixi_handle, "openDocumentFromString"):
+                tixi_handle.openDocumentFromString(xml_content)
+            else:
+                raise_mcp_error("OpenError", "No supported TIXI open-from-string API found.")
+
+            tigl_handle: Any = tigl3wrapper.Tigl3()
+            tigl_handle.open(tixi_handle, "")
+
+            # Lightweight parse for component listing
+            cpacs_config = parse_cpacs(xml_content)
+
+
+            session_id = session_manager.create_session(tixi_handle, tigl_handle, cpacs_config)
             summary = {
-                "num_wings": tigl_handle.getWingCount(),
-                "num_fuselages": tigl_handle.getFuselageCount(),
-                "num_rotors": tigl_handle.getRotorCount(),
-                "num_engines": tigl_handle.getEngineCount(),
+                "num_wings": len(cpacs_config.wings),
+                "num_fuselages": len(cpacs_config.fuselages),
+                "num_rotors": len(cpacs_config.rotors),
+                "num_engines": len(cpacs_config.engines),
             }
+
             return {
                 "session_id": session_id,
                 "cpacs_metadata": cpacs_stubs.extract_metadata(xml_content, file_name),
@@ -63,15 +119,12 @@ def open_cpacs_tool(session_manager: SessionManager) -> ToolDefinition:
 
     return ToolDefinition(
         name="open_cpacs",
-        description="Open a CPACS document and create a TiGL configuration.",
+        description="Open a CPACS session from a file path or an XML string.",
         parameters_model=OpenCpacsParams,
         handler=handler,
-        output_schema={
-            "session_id": "string",
-            "cpacs_metadata": "object",
-            "configuration_summary": "object",
-        },
+        output_schema={},
     )
+
 
 
 def close_cpacs_tool(session_manager: SessionManager) -> ToolDefinition:

@@ -1,21 +1,24 @@
-"""Session management for TiGL/TiXI handles."""
+"""Session management for CPACS/TIXI/TiGL handles."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Any
+
+from tigl_mcp_server.cpacs import CPACSConfiguration
+from tigl_mcp_server.errors import raise_mcp_error, MCPError
 import threading
 import uuid
-from dataclasses import dataclass
 
-from tigl_mcp_server.cpacs import CPACSConfiguration, TiglConfiguration, TixiDocument
-from tigl_mcp_server.errors import MCPError, raise_mcp_error
+
 
 
 @dataclass
 class SessionData:
     """Session payload stored by :class:`SessionManager`."""
-
-    tixi_handle: TixiDocument
-    tigl_handle: TiglConfiguration
+    session_id: str
+    tixi_handle: Any
+    tigl_handle: Any
     config: CPACSConfiguration
 
 
@@ -27,29 +30,21 @@ class SessionManager:
         self._sessions: dict[str, SessionData] = {}
         self._lock = threading.Lock()
 
-    def create_session(
-        self,
-        tixi_handle: TixiDocument,
-        tigl_handle: TiglConfiguration,
-        config: CPACSConfiguration,
-    ) -> str:
+    def create_session(self, tixi_handle: Any, tigl_handle: Any, config: CPACSConfiguration) -> str:
         """Register a new session and return its identifier."""
         session_id = str(uuid.uuid4())
         with self._lock:
             self._sessions[session_id] = SessionData(
-                tixi_handle=tixi_handle, tigl_handle=tigl_handle, config=config
+                session_id=session_id,tixi_handle=tixi_handle, tigl_handle=tigl_handle, config=config,
             )
         return session_id
 
-    def get(
-        self, session_id: str
-    ) -> tuple[TixiDocument, TiglConfiguration, CPACSConfiguration]:
-        """Retrieve handles for a session or raise an MCP error."""
+    def get(self, session_id: str) -> SessionData:
         with self._lock:
-            if session_id not in self._sessions:
-                raise MCPError("InvalidSession", f"Unknown session_id '{session_id}'")
-            data = self._sessions[session_id]
-        return data.tixi_handle, data.tigl_handle, data.config
+            data = self._sessions.get(session_id)
+            if data is None:
+                raise_mcp_error("InvalidSession", f"Unknown session_id '{session_id}'")
+            return data
 
     def close(self, session_id: str) -> None:
         """Close and remove a session."""
@@ -57,8 +52,18 @@ class SessionManager:
             data = self._sessions.get(session_id)
             if data is None:
                 raise_mcp_error("InvalidSession", f"Unknown session_id '{session_id}'")
-            data.tigl_handle.close()
-            data.tixi_handle.close()
+            def _best_effort_close(obj: Any, method_names: list[str]) -> None:
+                for name in method_names:
+                    fn = getattr(obj, name, None)
+                    if callable(fn):
+                        try:
+                            fn()
+                        except Exception:
+                            pass
+                        break
+
+            _best_effort_close(data.tigl_handle, ["close", "closeConfiguration", "close_configuration"])
+            _best_effort_close(data.tixi_handle, ["closeDocument", "close_document", "close"])
             del self._sessions[session_id]
 
 
