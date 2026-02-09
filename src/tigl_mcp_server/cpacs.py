@@ -63,7 +63,7 @@ class ComponentDefinition:
     index: int
     type_name: str
     symmetry: str | None
-    parameters: dict[str, object]
+    parameters: dict[str, float]
     bounding_box: BoundingBox
 
 
@@ -136,20 +136,15 @@ class TiglConfiguration:
 
 
 def _parse_components(root: ET.Element, tag: str) -> list[ComponentDefinition]:
+    """Parse CPACS components of a given tag."""
     components: list[ComponentDefinition] = []
     for index, element in enumerate(root.findall(f".//{tag}"), start=1):
-        uid = element.get("uid") or f"{tag}_{index}" 
+        uid = element.get("uid") or f"{tag}_{index}"
         name = element.get("name") or uid
         symmetry = element.get("symmetry")
-
-        tigl_uid = element.get("uID")
-
-        parameters: dict[str, object] = {}
-        if tigl_uid:
-            parameters["tigl_uid"] = tigl_uid
-
+        parameters: dict[str, float] = {}
         for attr, raw in element.attrib.items():
-            if attr in {"uid", "uID", "name", "symmetry"}:
+            if attr in {"uid", "name", "symmetry"}:
                 continue
             try:
                 parameters[attr] = float(raw)

@@ -49,17 +49,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     app, _tool_definitions = build_fastmcp_app(session_manager)
+
     transport_kwargs: dict[str, Any] = {}
     if args.transport in {"http", "sse", "streamable-http"}:
         transport_kwargs["host"] = args.host
         transport_kwargs["port"] = args.port
         if args.path is not None:
             transport_kwargs["path"] = args.path
-
-    # IMPORTANT: keep stdio clean (no banner, minimal logs)
-    if args.transport == "stdio":
-        transport_kwargs["show_banner"] = False
-        transport_kwargs["log_level"] = "ERROR"
 
     app.run(transport=args.transport, **transport_kwargs)
     return 0
