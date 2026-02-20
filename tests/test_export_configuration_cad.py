@@ -34,6 +34,7 @@ def test_export_configuration_cad_includes_cpacs_contents(
 
     result = export_tool.handler({"session_id": session_id, "format": "step"})
 
-    decoded = base64.b64decode(result["cad_base64"]).decode()
-    assert "<cpacs>" in decoded
-    assert sample_cpacs_xml.strip() in decoded
+    decoded_xml = base64.b64decode(result["cpacs_xml_base64"]).decode()
+    assert "<cpacs>" in decoded_xml
+    assert sample_cpacs_xml.strip() in decoded_xml
+

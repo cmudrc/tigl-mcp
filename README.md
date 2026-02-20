@@ -42,6 +42,27 @@ tigl-mcp-server --transport stdio
 tigl-mcp-server --transport http --host 127.0.0.1 --port 8000 --path /mcp
 ```
 
+## Docker
+
+Build the image (includes TiGL, Gmsh, SU2):
+
+```bash
+docker build -t tigl-mcp:dev .
+```
+
+**Apple Silicon (M1/M2/M3):** The TiGL/TIXI packages from the `dlr-sc` channel are only built for `linux/amd64`. Build for that platform so the image works (Docker will run it under emulation):
+
+```bash
+docker build --platform linux/amd64 -t tigl-mcp:dev .
+```
+
+To run SU2 on a folder that contains your mesh and config (e.g. `euler_smoke.cfg` and `D150_volume.su2`), from the repo root:
+
+```bash
+./scripts/run_su2_in_container.sh
+# or: ./scripts/run_su2_in_container.sh /path/to/out_step
+```
+
 ## Contributing
 
 - Keep modules single-purpose and favor pure functions.

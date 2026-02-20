@@ -409,6 +409,73 @@ def export_component_mesh_tool(session_manager: SessionManager) -> ToolDefinitio
         output_schema={},
     )
 
+def _export_configuration_cad_bytes_via_tigl(tigl_handle: Any, cad_format: str) -> bytes:
+    """
+    Export the full aircraft as CAD (STEP/IGES) via TiGL into a temp file, then return bytes.
+    This runs inside the TiGL Docker image where tigl3 is installed.
+    """
+    suffix = ".step" if cad_format == "step" else ".iges"
+
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
+        out_path = Path(f.name)
+
+    try:
+        out_path.unlink(missing_ok=True)
+
+        if cad_format == "step":
+            candidates = ["exportFusedSTEP", "exportSTEP", "exportFusedStep", "exportStep"]
+        else:
+            candidates = ["exportFusedIGES", "exportIGES", "exportFusedIges", "exportIges"]
+
+        tried: list[str] = []
+        errors: list[str] = []
+
+        # 1) Try explicit STEP/IGES methods first
+        for name in candidates:
+            fn = getattr(tigl_handle, name, None)
+            if not callable(fn):
+                continue
+
+            tried.append(name)
+            try:
+                fn(str(out_path))
+            except TypeError:
+                # Some builds accept additional args; try a mild fallback
+                try:
+                    fn(str(out_path), True)
+                except Exception as e:
+                    errors.append(f"{name}: {type(e).__name__}: {e}")
+                    continue
+            except Exception as e:
+                errors.append(f"{name}: {type(e).__name__}: {e}")
+                continue
+
+            if out_path.exists() and out_path.stat().st_size > 0:
+                return out_path.read_bytes()
+
+        # 2) Fallback: sometimes format is inferred from extension
+        for name in ["exportConfiguration", "exportconfiguration", "export"]:
+            fn = getattr(tigl_handle, name, None)
+            if not callable(fn):
+                continue
+
+            tried.append(name)
+            try:
+                fn(str(out_path))
+                if out_path.exists() and out_path.stat().st_size > 0:
+                    return out_path.read_bytes()
+            except Exception as e:
+                errors.append(f"{name}: {type(e).__name__}: {e}")
+
+        raise_mcp_error(
+            "CadExportError",
+            f"TiGL could not export {cad_format.upper()} CAD.",
+            {"methods_tried": tried, "errors": errors[:10]},
+        )
+    finally:
+        out_path.unlink(missing_ok=True)
+
+
 
 def export_configuration_cad_tool(session_manager: SessionManager) -> ToolDefinition:
     """Create the export_configuration_cad tool."""
@@ -416,10 +483,33 @@ def export_configuration_cad_tool(session_manager: SessionManager) -> ToolDefini
     def handler(raw_params: dict[str, object]) -> dict[str, object]:
         try:
             params = ExportCadParams.model_validate(raw_params)
-            tixi_handle, _, _ = require_session(session_manager, params.session_id)
-            cad_payload = f"cad:{params.format}:{tixi_handle.xml_content}"
-            cad_base64 = base64.b64encode(cad_payload.encode("utf-8")).decode("utf-8")
-            return {"format": params.format, "cad_base64": cad_base64}
+            tixi_handle, tigl_handle, _ = require_session(session_manager, params.session_id)
+
+            # Always include CPACS xml in a separate field (useful for debugging + tests).
+            cpacs_xml = getattr(tixi_handle, "xml_content", "") or ""
+            cpacs_xml_base64 = base64.b64encode(cpacs_xml.encode("utf-8")).decode("utf-8")
+
+            # Detect whether we're running with real TiGL (inside the Docker image).
+            export_capable = any(
+                callable(getattr(tigl_handle, name, None))
+                for name in ("exportFusedSTEP", "exportSTEP", "exportConfiguration", "export")
+            )
+
+            if export_capable:
+                cad_bytes = _export_configuration_cad_bytes_via_tigl(tigl_handle, params.format)
+                source = "tigl"
+            else:
+                # Fallback stub payload (only if TiGL isn't available).
+                cad_bytes = f"cad:{params.format}:{cpacs_xml}".encode("utf-8")
+                source = "stub"
+
+            cad_base64 = base64.b64encode(cad_bytes).decode("utf-8")
+            return {
+                "format": params.format,
+                "cad_base64": cad_base64,          # REAL STEP bytes (in Docker)
+                "source": source,                  # "tigl" or "stub"
+                "cpacs_xml_base64": cpacs_xml_base64,
+            }
         except MCPError as error:
             raise error
         except Exception as exc:  # pragma: no cover - defensive path
