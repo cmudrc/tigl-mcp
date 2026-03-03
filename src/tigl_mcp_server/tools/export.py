@@ -127,6 +127,16 @@ def _step_to_stl_bytes(step_path: Path) -> bytes:
         stl_path.unlink(missing_ok=True)
 
 
+def _count_stl_triangles(mesh_bytes: bytes) -> int | None:
+    """Count triangles in an ASCII or binary STL payload."""
+    try:
+        text = mesh_bytes.decode("ascii", errors="ignore")
+        count = text.count("endfacet")
+        if count > 0:
+            return count
+    except Exception:
+        pass
+    return None
 
 
 def _export_real_stl_bytes(tigl_handle: Any, component: ComponentDefinition) -> bytes:
@@ -161,8 +171,6 @@ def _export_real_stl_bytes(tigl_handle: Any, component: ComponentDefinition) -> 
         "No working STL export route found.",
         " | ".join(errors[:10]),
     )
-
-
 
 
 
@@ -209,7 +217,10 @@ def _export_su2_via_tigl(
     """Export SU2 mesh bytes using TiGL STL export combined with meshio conversion."""
     try:
         meshio_module: Any = import_module("meshio")
-        stl_bytes = _export_stl_bytes_via_tigl3(tigl_handle, component)
+        if _has_real_tigl_exports(tigl_handle):
+            stl_bytes = _export_stl_bytes_via_tigl3(tigl_handle, component)
+        else:
+            stl_bytes = _synthetic_mesh_bytes("stl", component)
     except MCPError:
         raise
     except Exception as exc:  # pragma: no cover - defensive path
@@ -306,17 +317,21 @@ def _synthetic_mesh_bytes(
 
 
 
+def _has_real_tigl_exports(tigl_handle: object) -> bool:
+    """Check whether the handle has real TiGL export methods (vs stub)."""
+    export_methods = ("exportMeshedWingSTL", "exportMeshedGeometrySTL", "exportFusedSTEP")
+    return any(callable(getattr(tigl_handle, m, None)) for m in export_methods)
+
 
 def _export_mesh_bytes(tigl_handle: TiglConfiguration, component: ComponentDefinition, mesh_format: MeshFormat) -> bytes:
     """Export mesh content for the requested format."""
     if mesh_format == "su2":
         return _export_su2_via_tigl(tigl_handle, component)
 
-    if mesh_format == "stl":
+    if mesh_format == "stl" and _has_real_tigl_exports(tigl_handle):
         return _export_real_stl_bytes(tigl_handle, component)
 
     return _synthetic_mesh_bytes(mesh_format, component)
-
 
 
 def _looks_like_handle(mesh_bytes: bytes) -> bool:
@@ -354,46 +369,38 @@ def export_component_mesh_tool(session_manager: SessionManager) -> ToolDefinitio
         try:
             params = ExportMeshParams.model_validate(raw_params)
             _, tigl_handle, config = require_session(session_manager, params.session_id)
-            # DEBUG: print available export-ish methods on tigl_handle (once) 
             if os.environ.get("TIGL_MCP_DEBUG_EXPORTS") == "1":
                 keys = ("export", "step", "iges", "stp", "stl", "write", "save", "mesh")
                 methods = [n for n in dir(tigl_handle) if any(k in n.lower() for k in keys)]
                 print(f"[tigl-mcp][debug] tigl_handle export-ish methods: {methods}", file=sys.stderr, flush=True)
+
             component = config.find_component(params.component_uid)
-
-            # If user passed a TiGL UID, map it back to our parsed component by tigl_uid
-            if component is None:
-                for c in config.all_components():
-                    if c.parameters.get("tigl_uid") == params.component_uid:
-                        component = c
-                        break
-
             if component is None:
                 raise_mcp_error("NotFound", f"Component '{params.component_uid}' not found")
-
 
             _ensure_export_supported(
                 tigl_handle=tigl_handle,
                 mesh_format=params.format,
                 component_uid=params.component_uid,
             )
-            if os.environ.get("TIGL_MCP_DEBUG_EXPORTS") == "1":
-                print(f"[tigl-mcp][debug] tigl_handle type={type(tigl_handle)} repr={tigl_handle!r}", file=sys.stderr)
             mesh_bytes = _export_mesh_bytes(
                 tigl_handle=tigl_handle,
                 component=component,
                 mesh_format=params.format,
             )
             validated_mesh = _validate_mesh_bytes(mesh_bytes, params.format, component)
-            # mesh_base64 is reserved for mesh bytes only.
             mesh_base64 = base64.b64encode(validated_mesh).decode("utf-8")
 
-            return {
+            result: dict[str, object] = {
                 "format": params.format,
                 "mesh_base64": mesh_base64,
-                "num_triangles": 12 * component.index,
                 "bounding_box": format_bounding_box(component.bounding_box),
             }
+            tri_count = _count_stl_triangles(validated_mesh)
+            if tri_count is not None:
+                result["num_triangles"] = tri_count
+
+            return result
         except MCPError as error:
             raise error
         except Exception as exc:  # pragma: no cover - defensive path
@@ -474,7 +481,6 @@ def _export_configuration_cad_bytes_via_tigl(tigl_handle: Any, cad_format: str) 
         )
     finally:
         out_path.unlink(missing_ok=True)
-
 
 
 def export_configuration_cad_tool(session_manager: SessionManager) -> ToolDefinition:
@@ -574,18 +580,16 @@ def _export_shape_to_stl_bytes(tigl_handle: object, component_uid: str) -> bytes
         out.unlink(missing_ok=True)
 
 def _uid_candidates(component: ComponentDefinition) -> list[str]:
-    tigl_uid = component.parameters.get("tigl_uid") if component.parameters else None
-    if isinstance(tigl_uid, str) and tigl_uid:
-        return [tigl_uid]
-
+    """Return UID variants to try when calling TiGL export methods."""
     u = component.uid
-    cands = [u, u.replace("_",""), u.replace("_","").title()]
-    seen=set(); out=[]
-    for x in cands:
+    candidates = [u, u.replace("_", ""), u.replace("_", "").title()]
+    seen: set[str] = set()
+    result: list[str] = []
+    for x in candidates:
         if x and x not in seen:
-            seen.add(x); out.append(x)
-    return out
-
+            seen.add(x)
+            result.append(x)
+    return result
 
 
 def _export_stl_bytes_via_tigl3(tigl: Any, component: ComponentDefinition) -> bytes:

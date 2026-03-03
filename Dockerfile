@@ -11,8 +11,8 @@ RUN mamba create -n tigl -y -c conda-forge python=3.11 meshio numpy gmsh python-
 
 ENV PATH=/opt/conda/envs/tigl/bin:$PATH
 
-# Verify SU2 binaries (used for CFD after TiGL export + meshing)
-RUN which SU2_CFD && SU2_CFD --help 2>/dev/null || true
+# Verify SU2 binaries are installed
+RUN which SU2_CFD || (echo "ERROR: SU2_CFD not found" && exit 1)
 
 WORKDIR /app
 COPY . /app

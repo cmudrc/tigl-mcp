@@ -44,25 +44,6 @@ def _read_source(params: OpenCpacsParams) -> tuple[str, str | None]:
 def open_cpacs_tool(session_manager: SessionManager) -> ToolDefinition:
     """Create the open_cpacs tool definition."""
 
-    def _open_real_cpacs_from_xml(xml_content: str):
-
-        tixi = tixi3wrapper.Tixi3()
-
-        # tixi3 supports openString in your container (you already verified this)
-        if hasattr(tixi, "openString"):
-            tixi.openString(xml_content)
-        elif hasattr(tixi, "openDocumentFromString"):
-            tixi.openDocumentFromString(xml_content)
-        else:
-            raise RuntimeError("No supported TIXI open-from-string API found")
-
-        tigl = tigl3wrapper.Tigl3()
-        # your test showed this works:
-        tigl.open(tixi, "")
-
-        return tixi, tigl
-
-    
     def handler(raw_params: dict[str, object]) -> dict[str, object]:
         try:
             params = OpenCpacsParams.model_validate(raw_params)
@@ -76,28 +57,21 @@ def open_cpacs_tool(session_manager: SessionManager) -> ToolDefinition:
                 xml_content = params.source
                 file_name = None
 
-            if tixi3wrapper is None or tigl3wrapper is None:
-                raise_mcp_error(
-                    "OpenError",
-                    "Real tigl3/tixi3 bindings not available.",
-                    "Run inside the Docker image that contains tigl3/tixi3.",
-                )
-
-            # Open CPACS in-memory (avoids host/container path issues)
-            tixi_handle: Any = tixi3wrapper.Tixi3()
-            if hasattr(tixi_handle, "openString"):
-                tixi_handle.openString(xml_content)
-            elif hasattr(tixi_handle, "openDocumentFromString"):
-                tixi_handle.openDocumentFromString(xml_content)
-            else:
-                raise_mcp_error("OpenError", "No supported TIXI open-from-string API found.")
-
-            tigl_handle: Any = tigl3wrapper.Tigl3()
-            tigl_handle.open(tixi_handle, "")
-
-            # Lightweight parse for component listing
             cpacs_config = parse_cpacs(xml_content)
 
+            if tixi3wrapper is not None and tigl3wrapper is not None:
+                tixi_handle: Any = tixi3wrapper.Tixi3()
+                if hasattr(tixi_handle, "openString"):
+                    tixi_handle.openString(xml_content)
+                elif hasattr(tixi_handle, "openDocumentFromString"):
+                    tixi_handle.openDocumentFromString(xml_content)
+                else:
+                    raise_mcp_error("OpenError", "No supported TIXI open-from-string API found.")
+                tigl_handle: Any = tigl3wrapper.Tigl3()
+                tigl_handle.open(tixi_handle, "")
+            else:
+                from tigl_mcp_server.cpacs import build_handles
+                tixi_handle, tigl_handle, _, _ = build_handles(xml_content, file_name)
 
             session_id = session_manager.create_session(tixi_handle, tigl_handle, cpacs_config)
             summary = {

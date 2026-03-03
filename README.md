@@ -56,12 +56,22 @@ docker build -t tigl-mcp:dev .
 docker build --platform linux/amd64 -t tigl-mcp:dev .
 ```
 
-To run SU2 on a folder that contains your mesh and config (e.g. `euler_smoke.cfg` and `D150_volume.su2`), from the repo root:
+To run SU2 on a folder that contains your mesh and config:
 
 ```bash
-./scripts/run_su2_in_container.sh
-# or: ./scripts/run_su2_in_container.sh /path/to/out_step
+docker run --rm -v /path/to/out_step:/work tigl-mcp:dev \
+  bash -lc "cd /work && SU2_CFD euler_smoke.cfg"
 ```
+
+## Examples
+
+The `examples/` directory contains standalone scripts that demonstrate the MCP
+workflow:
+
+- `mcp_export_step.py` — export the full aircraft as STEP via the MCP HTTP
+  endpoint.
+- `mcp_export_stl.py` — export a single component mesh as STL via the MCP HTTP
+  endpoint.
 
 ## Contributing
 

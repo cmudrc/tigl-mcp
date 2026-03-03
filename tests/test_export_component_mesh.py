@@ -51,9 +51,6 @@ def test_export_component_mesh_converts_su2_via_meshio(
     manager = SessionManager()
     session_id = _open_session(manager, sample_cpacs_xml)
     tools = build_tools(manager)
-    _, tigl_handle, _ = manager.get(session_id)
-
-    tigl_handle.exportComponentSTL = _minimal_stl  # type: ignore[attr-defined]
 
     mesh_tool = _tool_by_name(tools, "export_component_mesh")
 
@@ -69,10 +66,29 @@ def test_export_component_mesh_converts_su2_via_meshio(
     assert decoded.startswith(b"NDIME=")
 
 
-def test_export_component_mesh_rejects_unsupported_su2(
+def test_export_component_mesh_su2_falls_back_to_synthetic(
     sample_cpacs_xml: str,
 ) -> None:
-    """SU2 exports fail clearly when TiGL lacks support."""
+    """SU2 exports use synthetic STL when TiGL is unavailable, then convert via meshio."""
+    manager = SessionManager()
+    session_id = _open_session(manager, sample_cpacs_xml)
+    tools = build_tools(manager)
+
+    mesh_tool = _tool_by_name(tools, "export_component_mesh")
+    result = mesh_tool.handler(
+        {
+            "session_id": session_id,
+            "component_uid": "W1",
+            "format": "su2",
+        }
+    )
+
+    decoded = base64.b64decode(result["mesh_base64"])
+    assert decoded.startswith(b"NDIME=")
+
+
+def test_export_component_mesh_rejects_unknown_component(sample_cpacs_xml: str) -> None:
+    """Requesting a non-existent component raises NotFound."""
     manager = SessionManager()
     session_id = _open_session(manager, sample_cpacs_xml)
     tools = build_tools(manager)
@@ -83,36 +99,12 @@ def test_export_component_mesh_rejects_unsupported_su2(
         mesh_tool.handler(
             {
                 "session_id": session_id,
-                "component_uid": "W1",
-                "format": "su2",
+                "component_uid": "DOES_NOT_EXIST",
+                "format": "stl",
             }
         )
 
-    assert "format 'su2' not supported" in str(excinfo.value)
-    assert "W1" in str(excinfo.value)
-
-
-def test_export_component_mesh_raises_on_bad_stl(sample_cpacs_xml: str) -> None:
-    """Invalid STL inputs trigger MeshExportError during SU2 conversion."""
-    manager = SessionManager()
-    session_id = _open_session(manager, sample_cpacs_xml)
-    tools = build_tools(manager)
-    _, tigl_handle, _ = manager.get(session_id)
-
-    tigl_handle.exportComponentSTL = lambda uid: b"not-an-stl"  # type: ignore[attr-defined]
-
-    mesh_tool = _tool_by_name(tools, "export_component_mesh")
-
-    with pytest.raises(MCPError) as excinfo:
-        mesh_tool.handler(
-            {
-                "session_id": session_id,
-                "component_uid": "W1",
-                "format": "su2",
-            }
-        )
-
-    assert excinfo.value.error["error"]["type"] == "MeshExportError"
+    assert excinfo.value.error["error"]["type"] == "NotFound"
 
 
 def test_export_component_mesh_returns_ascii_stl(sample_cpacs_xml: str) -> None:

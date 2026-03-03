@@ -87,9 +87,13 @@ class CPACSConfiguration:
         )
 
     def find_component(self, uid: str) -> ComponentDefinition | None:
-        """Locate a component by UID."""
+        """Locate a component by UID (exact match first, then case-insensitive)."""
         for component in self.all_components():
             if component.uid == uid:
+                return component
+        uid_lower = uid.lower()
+        for component in self.all_components():
+            if component.uid.lower() == uid_lower:
                 return component
         return None
 
@@ -138,16 +142,12 @@ class TiglConfiguration:
 def _parse_components(root: ET.Element, tag: str) -> list[ComponentDefinition]:
     components: list[ComponentDefinition] = []
     for index, element in enumerate(root.findall(f".//{tag}"), start=1):
-        uid = element.get("uid") or f"{tag}_{index}" 
+        # CPACS uses "uID" (camelCase); test fixtures may use "uid" (lowercase).
+        uid = element.get("uID") or element.get("uid") or f"{tag}_{index}"
         name = element.get("name") or uid
         symmetry = element.get("symmetry")
 
-        tigl_uid = element.get("uID")
-
         parameters: dict[str, object] = {}
-        if tigl_uid:
-            parameters["tigl_uid"] = tigl_uid
-
         for attr, raw in element.attrib.items():
             if attr in {"uid", "uID", "name", "symmetry"}:
                 continue
