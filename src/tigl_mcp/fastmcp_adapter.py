@@ -45,7 +45,7 @@ def build_fastmcp_app(
 ) -> tuple[FastMCP, list[ToolDefinition]]:
     """Create a FastMCP server instance with all TiGL tools registered."""
     app = FastMCP(
-        name="tigl-mcp-server",
+        name="tigl-mcp",
         instructions=("CPACS/TiGL utilities exposed over the Model Context Protocol."),
     )
     tool_definitions = build_tools(session_manager)

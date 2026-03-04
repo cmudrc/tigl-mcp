@@ -20,7 +20,7 @@ If you are new to the project, this is the fastest path:
    source .venv/bin/activate
    make dev
    make test
-   tigl-mcp-server --transport stdio
+   tigl-mcp --transport stdio
 
 For the fuller setup flow, go straight to :doc:`quickstart`.
 

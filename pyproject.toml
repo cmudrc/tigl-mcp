@@ -42,7 +42,7 @@ dev = [
 ]
 
 [project.scripts]
-tigl-mcp-server = "tigl_mcp.main:main"
+tigl-mcp = "tigl_mcp.main:main"
 
 [tool.ruff]
 line-length = 88

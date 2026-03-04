@@ -34,7 +34,7 @@ make ci
 Start the server over stdio:
 
 ```bash
-tigl-mcp-server --transport stdio
+tigl-mcp --transport stdio
 ```
 
 Inspect the non-blocking HTTP transport configuration example:
