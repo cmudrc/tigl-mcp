@@ -1,6 +1,21 @@
 Quickstart
 ==========
 
+Fast path
+---------
+
+If you want to get moving immediately, use this minimal setup:
+
+.. code-block:: bash
+
+   python3 -m venv .venv
+   source .venv/bin/activate
+   make dev
+   tigl-mcp-server --transport stdio
+
+Then come back to the sections below for validation, examples, and workflow
+details.
+
 Setup
 -----
 

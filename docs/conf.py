@@ -55,9 +55,11 @@ else:
         html_theme = "alabaster"
 
 html_static_path = ["_static"]
+html_css_files = ["custom.css"]
 html_logo = "drc.png"
+html_title = project
 html_theme_options = {
-    "logo_only": True,
+    "logo_only": False,
 }
 
 _VIEWPORT_META_RE = re.compile(r'<meta name="viewport"[^>]*>', re.IGNORECASE)
