@@ -1,7 +1,7 @@
 Tool Catalog
 ============
 
-The current tool catalog is assembled by ``tigl_mcp_server.tools.build_tools``.
+The current tool catalog is assembled by ``tigl_mcp.tools.build_tools``.
 
 Available tool groups
 ---------------------
@@ -18,5 +18,5 @@ Available tool groups
 All tools use Pydantic-backed request validation and return JSON-serializable
 payloads suitable for MCP clients.
 
-.. automodule:: tigl_mcp_server.tools
+.. automodule:: tigl_mcp.tools
    :members:

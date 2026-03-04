@@ -11,5 +11,5 @@ Current guarantees
 - Missing sessions raise structured ``InvalidSession`` errors.
 - Closing a session marks the stored handles as closed and removes the session.
 
-.. automodule:: tigl_mcp_server.session_manager
+.. automodule:: tigl_mcp.session_manager
    :members:

@@ -7,11 +7,11 @@ on the importable module surface and callable entrypoints.
 Top-level package
 -----------------
 
-.. automodule:: tigl_mcp_server
+.. automodule:: tigl_mcp
    :members:
 
 CLI entrypoint
 --------------
 
-.. automodule:: tigl_mcp_server.main
+.. automodule:: tigl_mcp.main
    :members:

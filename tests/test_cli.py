@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from tigl_mcp_server import main as server_main
+from tigl_mcp import main as server_main
 
 
 class _DummyApp:

@@ -7,10 +7,10 @@ from collections.abc import Iterable
 
 import pytest
 
-from tigl_mcp_server.errors import MCPError
-from tigl_mcp_server.session_manager import SessionManager
-from tigl_mcp_server.tooling import ToolDefinition
-from tigl_mcp_server.tools import build_tools
+from tigl_mcp.errors import MCPError
+from tigl_mcp.session_manager import SessionManager
+from tigl_mcp.tooling import ToolDefinition
+from tigl_mcp.tools import build_tools
 
 
 def _tool_by_name(tools: Iterable[ToolDefinition], name: str) -> ToolDefinition:

@@ -45,7 +45,7 @@ qa: lint fmt-check type test
 
 coverage:
 	mkdir -p artifacts/coverage
-	PYTHONPATH=src $(PYTEST) --cov=tigl_mcp_server --cov-report=term --cov-report=json:artifacts/coverage/coverage.json -q
+	PYTHONPATH=src $(PYTEST) --cov=tigl_mcp --cov-report=term --cov-report=json:artifacts/coverage/coverage.json -q
 	$(PYTHON) scripts/check_coverage_thresholds.py --coverage-json artifacts/coverage/coverage.json
 
 examples-smoke:
@@ -76,6 +76,6 @@ release-check:
 ci: qa coverage docs-check examples-smoke
 
 clean:
-	rm -rf .coverage .mypy_cache .pytest_cache .ruff_cache artifacts build dist docs/_build src/*.egg-info src/tigl_mcp.egg-info src/tigl_mcp_server.egg-info
+	rm -rf .coverage .mypy_cache .pytest_cache .ruff_cache artifacts build dist docs/_build src/*.egg-info src/tigl_mcp.egg-info
 	find . -type d -name "__pycache__" -prune -exec rm -rf {} + 2>/dev/null || true
 	find . -type f \( -name "*.pyc" -o -name ".coverage.*" \) -exec rm -f {} + 2>/dev/null || true

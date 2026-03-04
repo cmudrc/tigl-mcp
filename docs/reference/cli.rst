@@ -1,8 +1,8 @@
 CLI and Transports
 ==================
 
-The ``tigl-mcp-server`` command and ``python -m tigl_mcp_server`` entrypoint
-both use ``tigl_mcp_server.main``.
+The ``tigl-mcp-server`` command and ``python -m tigl_mcp`` entrypoint
+both use ``tigl_mcp.main``.
 
 Supported transports
 --------------------

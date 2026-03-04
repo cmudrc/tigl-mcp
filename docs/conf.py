@@ -39,7 +39,7 @@ nitpick_ignore = [
     ("py:class", "collections.abc.Callable"),
     ("py:class", "collections.abc.Iterable"),
     ("py:class", "collections.abc.Sequence"),
-    ("py:class", "tigl_mcp_server.errors.MCPErrorPayload"),
+    ("py:class", "tigl_mcp.errors.MCPErrorPayload"),
 ]
 templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]

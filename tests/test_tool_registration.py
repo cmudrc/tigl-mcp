@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from tigl_mcp_server.errors import MCPError
-from tigl_mcp_server.session_manager import SessionManager
-from tigl_mcp_server.tools import build_tools
+from tigl_mcp.errors import MCPError
+from tigl_mcp.session_manager import SessionManager
+from tigl_mcp.tools import build_tools
 
 
 def test_build_tools_registers_expected_stub_toolset() -> None:

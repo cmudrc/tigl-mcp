@@ -49,6 +49,6 @@ pre-commit run --all-files
 ## Current Capability Boundaries
 
 - The default test suite targets the deterministic CPACS/TiGL stubs in
-  `tigl_mcp_server.cpacs_stubs`.
+  `tigl_mcp.cpacs_stubs`.
 - Real TiGL integration tests should stay optional and use the
   `integration_real` marker once those fixtures exist.

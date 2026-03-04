@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import json
 
-from tigl_mcp_server.session_manager import SessionManager
-from tigl_mcp_server.tools import build_tools
+from tigl_mcp.session_manager import SessionManager
+from tigl_mcp.tools import build_tools
 
 SAMPLE_CPACS_XML = """
 <cpacs>

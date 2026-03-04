@@ -1,8 +1,8 @@
 Stub-backed CPACS Behavior
 ==========================
 
-The current package uses deterministic stand-ins from ``tigl_mcp_server.cpacs``
-and ``tigl_mcp_server.cpacs_stubs`` instead of requiring full TiXI/TiGL
+The current package uses deterministic stand-ins from ``tigl_mcp.cpacs``
+and ``tigl_mcp.cpacs_stubs`` instead of requiring full TiXI/TiGL
 installations.
 
 Why this exists
@@ -20,5 +20,5 @@ What is intentionally simplified
 - Sampling and intersections are synthetic but deterministic.
 - Mesh and CAD exports are format-like payloads designed for stable testing.
 
-.. automodule:: tigl_mcp_server.cpacs
+.. automodule:: tigl_mcp.cpacs
    :members:

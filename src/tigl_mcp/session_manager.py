@@ -6,8 +6,8 @@ import threading
 import uuid
 from dataclasses import dataclass
 
-from tigl_mcp_server.cpacs import CPACSConfiguration, TiglConfiguration, TixiDocument
-from tigl_mcp_server.errors import MCPError, raise_mcp_error
+from tigl_mcp.cpacs import CPACSConfiguration, TiglConfiguration, TixiDocument
+from tigl_mcp.errors import MCPError, raise_mcp_error
 
 
 @dataclass

@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from tigl_mcp_server.cpacs import (
+from tigl_mcp.cpacs import (
     TiglConfiguration,
     TixiDocument,
     parse_cpacs,
 )
-from tigl_mcp_server.cpacs import (
+from tigl_mcp.cpacs import (
     extract_metadata as cpacs_extract_metadata,
 )
 

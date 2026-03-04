@@ -53,7 +53,7 @@ Current capability notes
 ------------------------
 
 - The package currently uses deterministic CPACS/TiGL stand-ins from
-  ``tigl_mcp_server.cpacs_stubs``.
+  ``tigl_mcp.cpacs_stubs``.
 - Output schemas and tool names are stable.
 - Geometry numbers are intentionally simplified to keep local development and CI
   deterministic.

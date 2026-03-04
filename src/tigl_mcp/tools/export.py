@@ -9,11 +9,11 @@ from collections.abc import Iterator, Sized
 from importlib import import_module
 from typing import Any, Literal, NoReturn
 
-from tigl_mcp_server.cpacs import ComponentDefinition, TiglConfiguration
-from tigl_mcp_server.errors import MCPError, raise_mcp_error
-from tigl_mcp_server.session_manager import SessionManager
-from tigl_mcp_server.tooling import ToolDefinition, ToolParameters
-from tigl_mcp_server.tools.common import format_bounding_box, require_session
+from tigl_mcp.cpacs import ComponentDefinition, TiglConfiguration
+from tigl_mcp.errors import MCPError, raise_mcp_error
+from tigl_mcp.session_manager import SessionManager
+from tigl_mcp.tooling import ToolDefinition, ToolParameters
+from tigl_mcp.tools.common import format_bounding_box, require_session
 
 MeshFormat = Literal["stl", "vtk", "collada", "su2"]
 

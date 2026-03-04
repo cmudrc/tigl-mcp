@@ -5,10 +5,10 @@ from __future__ import annotations
 import pathlib
 from typing import Literal
 
-from tigl_mcp_server import cpacs_stubs
-from tigl_mcp_server.errors import MCPError, raise_mcp_error
-from tigl_mcp_server.session_manager import SessionManager
-from tigl_mcp_server.tooling import ToolDefinition, ToolParameters
+from tigl_mcp import cpacs_stubs
+from tigl_mcp.errors import MCPError, raise_mcp_error
+from tigl_mcp.session_manager import SessionManager
+from tigl_mcp.tooling import ToolDefinition, ToolParameters
 
 
 class OpenCpacsParams(ToolParameters):

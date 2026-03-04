@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from typing import TypedDict
 
-from tigl_mcp_server.cpacs import (
+from tigl_mcp.cpacs import (
     BoundingBox,
     CPACSConfiguration,
     TiglConfiguration,
     TixiDocument,
 )
-from tigl_mcp_server.errors import MCPError, raise_mcp_error
-from tigl_mcp_server.session_manager import SessionManager
+from tigl_mcp.errors import MCPError, raise_mcp_error
+from tigl_mcp.session_manager import SessionManager
 
 
 class BoundingBoxDict(TypedDict):

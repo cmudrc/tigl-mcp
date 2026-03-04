@@ -6,8 +6,8 @@ import argparse
 from collections.abc import Sequence
 from typing import Any
 
-from tigl_mcp_server.fastmcp_adapter import build_fastmcp_app
-from tigl_mcp_server.session_manager import session_manager
+from tigl_mcp.fastmcp_adapter import build_fastmcp_app
+from tigl_mcp.session_manager import session_manager
 
 
 def build_parser() -> argparse.ArgumentParser:

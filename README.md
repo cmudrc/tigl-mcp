@@ -67,7 +67,7 @@ make docs
 ## Current Capability Boundaries
 
 - The default tests and examples target the deterministic stand-ins in
-  `tigl_mcp_server.cpacs_stubs`.
+  `tigl_mcp.cpacs_stubs`.
 - Tool names, schemas, and JSON payload shapes are stable.
 - Geometry values are intentionally simplified; they reflect the current stub
   contract rather than full native TiGL fidelity.

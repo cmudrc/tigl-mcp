@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tigl_mcp_server.cpacs import BoundingBox, extract_metadata, parse_cpacs
+from tigl_mcp.cpacs import BoundingBox, extract_metadata, parse_cpacs
 
 
 def test_parse_cpacs_extracts_stub_components(sample_cpacs_xml: str) -> None:

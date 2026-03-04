@@ -2,27 +2,27 @@
 
 from __future__ import annotations
 
-from tigl_mcp_server.session_manager import SessionManager
-from tigl_mcp_server.tooling import ToolDefinition
-from tigl_mcp_server.tools.configuration import (
+from tigl_mcp.session_manager import SessionManager
+from tigl_mcp.tooling import ToolDefinition
+from tigl_mcp.tools.configuration import (
     get_component_metadata_tool,
     get_configuration_summary_tool,
     list_geometric_components_tool,
 )
-from tigl_mcp_server.tools.cpacs_io import close_cpacs_tool, open_cpacs_tool
-from tigl_mcp_server.tools.export import (
+from tigl_mcp.tools.cpacs_io import close_cpacs_tool, open_cpacs_tool
+from tigl_mcp.tools.export import (
     export_component_mesh_tool,
     export_configuration_cad_tool,
 )
-from tigl_mcp_server.tools.metrics import (
+from tigl_mcp.tools.metrics import (
     get_fuselage_summary_tool,
     get_wing_summary_tool,
 )
-from tigl_mcp_server.tools.parameters import (
+from tigl_mcp.tools.parameters import (
     get_high_level_parameters_tool,
     set_high_level_parameters_tool,
 )
-from tigl_mcp_server.tools.sampling import (
+from tigl_mcp.tools.sampling import (
     intersect_components_tool,
     intersect_with_plane_tool,
     sample_component_surface_tool,

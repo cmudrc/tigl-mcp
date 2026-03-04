@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from tigl_mcp_server.main import build_parser
+from tigl_mcp.main import build_parser
 
 
 def main() -> None:

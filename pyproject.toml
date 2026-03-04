@@ -42,7 +42,7 @@ dev = [
 ]
 
 [project.scripts]
-tigl-mcp-server = "tigl_mcp_server.main:main"
+tigl-mcp-server = "tigl_mcp.main:main"
 
 [tool.ruff]
 line-length = 88
@@ -66,7 +66,7 @@ mypy_path = "src"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--cov=tigl_mcp_server --cov-report=term-missing"
+addopts = "--cov=tigl_mcp --cov-report=term-missing"
 pythonpath = ["src"]
 markers = [
   "examples_smoke: deterministic example smoke tests",
@@ -79,4 +79,4 @@ markers = [
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["tigl_mcp_server*"]
+include = ["tigl_mcp*"]

@@ -7,8 +7,8 @@ import json
 
 from fastmcp.client import Client
 
-from tigl_mcp_server.fastmcp_adapter import build_fastmcp_app
-from tigl_mcp_server.session_manager import SessionManager
+from tigl_mcp.fastmcp_adapter import build_fastmcp_app
+from tigl_mcp.session_manager import SessionManager
 
 
 async def _main() -> None:
