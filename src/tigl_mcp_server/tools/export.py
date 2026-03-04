@@ -416,6 +416,74 @@ def export_component_mesh_tool(session_manager: SessionManager) -> ToolDefinitio
         output_schema={},
     )
 
+def _make_closed_solid_step(tigl_handle: Any, out_path: Path) -> bool:
+    """
+    Build a proper closed-solid STEP by extracting each component loft from TiGL,
+    closing open shells with ShapeFix, converting to solids, and fusing via
+    BRepAlgoAPI_Fuse.  This produces MANIFOLD_SOLID_BREP / CLOSED_SHELL in STEP
+    instead of the OPEN_SHELL that TiGL's exportFusedSTEP emits for fuselages.
+
+    Returns True on success, False if the required OCC modules are unavailable.
+    """
+    try:
+        from tigl3.configuration import CCPACSConfigurationManager_get_instance
+        from OCC.Core.TopoDS import topods
+        from OCC.Core.TopExp import TopExp_Explorer
+        from OCC.Core.TopAbs import TopAbs_SHELL
+        from OCC.Core.ShapeFix import ShapeFix_Shell
+        from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_MakeSolid
+        from OCC.Core.BRepAlgoAPI import BRepAlgoAPI_Fuse
+        from OCC.Core.STEPControl import STEPControl_Writer, STEPControl_AsIs
+    except ImportError:
+        return False
+
+    handle_val = getattr(tigl_handle, "_handle", None)
+    if handle_val is None:
+        return False
+    handle_int = getattr(handle_val, "value", handle_val)
+
+    try:
+        mgr = CCPACSConfigurationManager_get_instance()
+        config = mgr.get_configuration(handle_int)
+    except Exception:
+        return False
+
+    solids = []
+
+    def _shells_to_solids(shape: Any) -> None:
+        exp = TopExp_Explorer(shape, TopAbs_SHELL)
+        while exp.More():
+            shell = topods.Shell(exp.Current())
+            if not shell.Closed():
+                fixer = ShapeFix_Shell(shell)
+                fixer.Perform()
+                shell = fixer.Shell()
+            maker = BRepBuilderAPI_MakeSolid(shell)
+            if maker.IsDone():
+                solids.append(maker.Solid())
+            exp.Next()
+
+    for i in range(1, config.get_wing_count() + 1):
+        _shells_to_solids(config.get_wing(i).get_loft().shape())
+
+    for i in range(1, config.get_fuselage_count() + 1):
+        _shells_to_solids(config.get_fuselage(i).get_loft().shape())
+
+    if not solids:
+        return False
+
+    result = solids[0]
+    for s in solids[1:]:
+        fuser = BRepAlgoAPI_Fuse(result, s)
+        if fuser.IsDone():
+            result = fuser.Shape()
+
+    writer = STEPControl_Writer()
+    writer.Transfer(result, STEPControl_AsIs)
+    status = writer.Write(str(out_path))
+    return status == 1 and out_path.exists() and out_path.stat().st_size > 0
+
+
 def _export_configuration_cad_bytes_via_tigl(tigl_handle: Any, cad_format: str) -> bytes:
     """
     Export the full aircraft as CAD (STEP/IGES) via TiGL into a temp file, then return bytes.
@@ -428,6 +496,12 @@ def _export_configuration_cad_bytes_via_tigl(tigl_handle: Any, cad_format: str) 
 
     try:
         out_path.unlink(missing_ok=True)
+
+        # For STEP: prefer the closed-solid export path that produces
+        # MANIFOLD_SOLID_BREP / CLOSED_SHELL instead of OPEN_SHELL.
+        if cad_format == "step":
+            if _make_closed_solid_step(tigl_handle, out_path):
+                return out_path.read_bytes()
 
         if cad_format == "step":
             candidates = ["exportFusedSTEP", "exportSTEP", "exportFusedStep", "exportStep"]
@@ -447,7 +521,6 @@ def _export_configuration_cad_bytes_via_tigl(tigl_handle: Any, cad_format: str) 
             try:
                 fn(str(out_path))
             except TypeError:
-                # Some builds accept additional args; try a mild fallback
                 try:
                     fn(str(out_path), True)
                 except Exception as e:
