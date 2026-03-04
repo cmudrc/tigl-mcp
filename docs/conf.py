@@ -15,6 +15,20 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.napoleon",
 ]
+autodoc_mock_imports = [
+    "fastmcp",
+    "fastmcp.tools",
+    "fastmcp.tools.tool",
+    "mcp",
+    "meshio",
+]
+nitpick_ignore = [
+    ("py:class", "argparse.ArgumentParser"),
+    ("py:class", "collections.abc.Callable"),
+    ("py:class", "collections.abc.Iterable"),
+    ("py:class", "collections.abc.Sequence"),
+    ("py:class", "tigl_mcp_server.errors.MCPErrorPayload"),
+]
 templates_path: list[str] = []
 exclude_patterns = ["_build"]
 html_theme = "alabaster"
