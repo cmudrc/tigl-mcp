@@ -73,6 +73,34 @@ workflow:
 - `mcp_export_stl.py` — export a single component mesh as STL via the MCP HTTP
   endpoint.
 
+## Full pipeline (TiGL → SU2 → pyCycle)
+
+This server is the first stage of an automated aircraft analysis pipeline:
+
+```
+CPACS XML → [TiGL MCP] → STEP → [Gmsh] → Mesh → [SU2] → CL/CD → [pyCycle] → TSFC
+```
+
+The pipeline is driven by a `pipeline_config.yaml` that controls flight conditions, mesh quality, CFD settings, and engine parameters. See [su2-mcp](https://github.com/cmudrc/su2-mcp) and [pycycle-mcp](https://github.com/cmudrc/pycycle-mcp) for the downstream servers.
+
+### TiGL-specific notes
+
+- **STEP export** uses OpenCASCADE (`ShapeFix_Shell` → `BRepBuilderAPI_MakeSolid` → `BRepAlgoAPI_Fuse`) to produce watertight `MANIFOLD_SOLID_BREP` geometry suitable for volume meshing.
+- **Symmetric mirroring** is handled automatically — `get_mirrored_loft()` is called for wings and fuselages so the exported STEP contains the full aircraft.
+- STEP deflection tolerance is hardcoded at 0.001 (model units). This is tight enough that the geometry itself is smooth; any visual coarseness comes from the downstream mesh density.
+
+### System-level dependencies
+
+TiGL and its dependencies cannot be pip-installed. Use conda:
+
+```bash
+conda create -n tigl -c dlr-sc -c conda-forge python=3.11 tigl3 pythonocc-core
+conda activate tigl
+pip install -e .
+```
+
+Or use the Docker image (`docker build -t tigl-mcp:dev .`), which bundles TiGL, Gmsh, and SU2.
+
 ## Contributing
 
 - Keep modules single-purpose and favor pure functions.
