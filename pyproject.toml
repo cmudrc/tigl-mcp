@@ -5,8 +5,15 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "tigl-mcp"
 version = "0.1.0"
-description = "Initial MCP scaffold for TiGL"
-authors = [{name = "TiGL Team"}]
+description = "An MCP around the TiGL library"
+authors = [
+  { name = "The Design Research Collective", email = "ask-drc@cmu.edu" }
+]
+
+maintainers = [
+  { name = "Mayank Dixit", email = "mayankd@andrew.cmu.edu" },
+  { name = "Christopher McComb", email = "ask-drc@cmu.edu" },
+]
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -15,6 +22,12 @@ dependencies = [
   "meshio>=5.3",
 ]
 
+[project.urls]
+Homepage = "https://github.com/cmudrc/tigl-mcp"
+Repository = "https://github.com/cmudrc/tigl-mcp"
+Issues = "https://github.com/cmudrc/tigl-mcp/issues"
+Documentation = "https://cmudrc.github.io/tigl-mcp/"
+
 [project.optional-dependencies]
 dev = [
   "pytest>=7.4",
@@ -22,6 +35,10 @@ dev = [
   "mypy>=1.11",
   "ruff>=0.6.0",
   "black>=24.8.0",
+  "sphinx>=8.0",
+  "build>=1.2.0",
+  "twine>=5.1.0",
+  "pre-commit>=3.8.0",
 ]
 
 [project.scripts]
@@ -51,6 +68,11 @@ mypy_path = "src"
 testpaths = ["tests"]
 addopts = "--cov=tigl_mcp_server --cov-report=term-missing"
 pythonpath = ["src"]
+markers = [
+  "examples_smoke: deterministic example smoke tests",
+  "examples_full: extended deterministic example tests",
+  "integration_real: optional tests requiring real CPACS/TiGL assets",
+]
 
 [tool.setuptools.package-dir]
 "" = "src"
