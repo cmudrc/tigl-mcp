@@ -2,7 +2,6 @@ PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 PIP ?= $(PYTHON) -m pip
 PYTEST ?= $(PYTHON) -m pytest
 RUFF ?= $(PYTHON) -m ruff
-BLACK ?= $(PYTHON) -m black
 MYPY ?= $(PYTHON) -m mypy
 SPHINX ?= $(PYTHON) -m sphinx
 BUILD ?= $(PYTHON) -m build
@@ -31,10 +30,10 @@ lint:
 	$(RUFF) check .
 
 fmt:
-	$(BLACK) .
+	$(RUFF) format .
 
 fmt-check:
-	$(BLACK) --check .
+	$(RUFF) format --check .
 
 type:
 	$(MYPY) src

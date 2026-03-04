@@ -42,8 +42,7 @@ pre-commit run --all-files
 ## Code Style
 
 - Python 3.11+ target.
-- Black for formatting.
-- Ruff for linting.
+- Ruff for formatting and linting.
 - Mypy for static type checking.
 - Pytest for tests.
 

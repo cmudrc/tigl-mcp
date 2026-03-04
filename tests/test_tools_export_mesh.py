@@ -75,7 +75,7 @@ def test_export_component_mesh_converts_su2_via_meshio(
 def test_export_component_mesh_rejects_unsupported_su2(
     sample_cpacs_xml: str,
 ) -> None:
-    """SU2 exports fail clearly when no STL export capability is attached."""
+    """SU2 exports fail clearly when no STL export hook is attached."""
     manager = SessionManager()
     session_id = _open_session(manager, sample_cpacs_xml)
     tools = build_tools(manager)
@@ -91,8 +91,8 @@ def test_export_component_mesh_rejects_unsupported_su2(
             }
         )
 
-    assert "format 'su2' not supported" in str(excinfo.value)
-    assert "W1" in str(excinfo.value)
+    assert excinfo.value.error["error"]["type"] == "MeshExportError"
+    assert "Failed to export STL mesh for 'W1' via TiGL" in str(excinfo.value)
 
 
 def test_export_component_mesh_raises_on_bad_stl(sample_cpacs_xml: str) -> None:

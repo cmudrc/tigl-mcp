@@ -34,7 +34,6 @@ dev = [
   "pytest-cov>=4.1",
   "mypy>=1.11",
   "ruff>=0.6.0",
-  "black>=24.8.0",
   "sphinx>=8.0",
   "build>=1.2.0",
   "twine>=5.1.0",
@@ -44,12 +43,12 @@ dev = [
 [project.scripts]
 tigl-mcp-server = "tigl_mcp_server.main:main"
 
-[tool.black]
-line-length = 88
-target-version = ["py311"]
-
 [tool.ruff]
 line-length = 88
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "ANN", "C4", "D"]
