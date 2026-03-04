@@ -21,7 +21,7 @@ The project currently provides:
 
 ## Quickstart
 
-Requires Python 3.11+.
+Requires Python 3.12+.
 
 ```bash
 python3 -m venv .venv

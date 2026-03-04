@@ -15,7 +15,7 @@ maintainers = [
   { name = "Christopher McComb", email = "ask-drc@cmu.edu" },
 ]
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
   "pydantic>=2.9.0",
   "fastmcp~=2.13.1",
@@ -55,7 +55,7 @@ select = ["E", "F", "I", "B", "UP", "ANN", "C4", "D"]
 ignore = ["D203", "D213"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 warn_return_any = true
 warn_unused_ignores = true
 warn_unused_configs = true

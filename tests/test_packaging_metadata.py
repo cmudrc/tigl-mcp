@@ -17,7 +17,7 @@ def test_project_urls_and_cli_entrypoint_are_declared() -> None:
     """The package metadata exposes repo links and the CLI entrypoint."""
     project = _pyproject()["project"]
 
-    assert project["requires-python"] == ">=3.11"
+    assert project["requires-python"] == ">=3.12"
     assert project["scripts"]["tigl-mcp-server"] == "tigl_mcp_server.main:main"
     assert "Documentation" in project["urls"]
     assert "Repository" in project["urls"]
