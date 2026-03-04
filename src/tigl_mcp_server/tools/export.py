@@ -464,10 +464,24 @@ def _make_closed_solid_step(tigl_handle: Any, out_path: Path) -> bool:
             exp.Next()
 
     for i in range(1, config.get_wing_count() + 1):
-        _shells_to_solids(config.get_wing(i).get_loft().shape())
+        wing = config.get_wing(i)
+        _shells_to_solids(wing.get_loft().shape())
+        try:
+            mirrored = wing.get_mirrored_loft()
+            if mirrored is not None:
+                _shells_to_solids(mirrored.shape())
+        except Exception:
+            pass
 
     for i in range(1, config.get_fuselage_count() + 1):
-        _shells_to_solids(config.get_fuselage(i).get_loft().shape())
+        fuselage = config.get_fuselage(i)
+        _shells_to_solids(fuselage.get_loft().shape())
+        try:
+            mirrored = fuselage.get_mirrored_loft()
+            if mirrored is not None:
+                _shells_to_solids(mirrored.shape())
+        except Exception:
+            pass
 
     if not solids:
         return False
