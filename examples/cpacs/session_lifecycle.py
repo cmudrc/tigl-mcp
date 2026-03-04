@@ -27,6 +27,8 @@ SAMPLE_CPACS_XML = """
   </vehicles>
 </cpacs>
 """.strip()
+
+
 def main() -> None:
     """Run the deterministic session lifecycle and print a JSON summary."""
     manager = SessionManager()

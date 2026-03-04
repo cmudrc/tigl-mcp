@@ -1,4 +1,4 @@
-"""Regression coverage for configuration CAD exports."""
+"""Coverage for deterministic configuration CAD export behavior."""
 
 from __future__ import annotations
 
@@ -10,17 +10,17 @@ from tigl_mcp_server.tools import build_tools
 
 
 def _tool_by_name(tools: list[ToolDefinition], name: str) -> ToolDefinition:
+    """Return the named tool definition."""
     for tool in tools:
         if tool.name == name:
             return tool
-    msg = f"Tool '{name}' not found"
-    raise AssertionError(msg)
+    raise AssertionError(f"Tool '{name}' not found")
 
 
 def test_export_configuration_cad_includes_cpacs_contents(
     sample_cpacs_xml: str,
 ) -> None:
-    """Exports include the CPACS payload, not just metadata."""
+    """CAD export returns the stub payload plus the original CPACS XML."""
     manager = SessionManager()
     tools = build_tools(manager)
 
@@ -35,5 +35,5 @@ def test_export_configuration_cad_includes_cpacs_contents(
     result = export_tool.handler({"session_id": session_id, "format": "step"})
 
     decoded = base64.b64decode(result["cad_base64"]).decode()
-    assert "<cpacs>" in decoded
-    assert sample_cpacs_xml.strip() in decoded
+    assert decoded.startswith("cad:step:")
+    assert sample_cpacs_xml in decoded

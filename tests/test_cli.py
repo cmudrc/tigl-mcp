@@ -1,4 +1,4 @@
-"""CLI-level coverage for the FastMCP server wrapper."""
+"""CLI contract tests for the TiGL MCP server entrypoints."""
 
 from __future__ import annotations
 
@@ -13,13 +13,23 @@ class _DummyApp:
     def __init__(self) -> None:
         self.run_calls: list[dict[str, object]] = []
 
-    def add_tool(self, _: object) -> None:  # pragma: no cover - not used directly
+    def add_tool(self, _: object) -> None:  # pragma: no cover - compatibility shim
         return
 
-    def run(
-        self, *, transport: str, **kwargs: object
-    ) -> None:  # pragma: no cover - exercised via main
+    def run(self, *, transport: str, **kwargs: object) -> None:
+        """Capture transport arguments passed by the CLI."""
         self.run_calls.append({"transport": transport, **kwargs})
+
+
+def test_build_parser_defaults_to_stdio_transport() -> None:
+    """The CLI defaults to the local stdio transport."""
+    parser = server_main.build_parser()
+    args = parser.parse_args([])
+
+    assert args.transport == "stdio"
+    assert args.host == "0.0.0.0"
+    assert args.port == 8000
+    assert args.path is None
 
 
 def test_main_runs_fastmcp_with_transport(monkeypatch: pytest.MonkeyPatch) -> None:

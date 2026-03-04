@@ -29,9 +29,7 @@ def main() -> int:
             f"Coverage {percent:.2f}% is below the required minimum "
             f"{args.minimum:.2f}%."
         )
-    print(
-        f"Coverage {percent:.2f}% meets the minimum {args.minimum:.2f}%."
-    )
+    print(f"Coverage {percent:.2f}% meets the minimum {args.minimum:.2f}%.")
     return 0
 
 
