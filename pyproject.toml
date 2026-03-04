@@ -5,15 +5,28 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "tigl-mcp"
 version = "0.1.0"
-description = "Initial MCP scaffold for TiGL"
-authors = [{name = "TiGL Team"}]
+description = "An MCP around the TiGL library"
+authors = [
+  { name = "The Design Research Collective", email = "ask-drc@cmu.edu" }
+]
+
+maintainers = [
+  { name = "Mayank Dixit", email = "mayankd@andrew.cmu.edu" },
+  { name = "Christopher McComb", email = "ask-drc@cmu.edu" },
+]
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
   "pydantic>=2.9.0",
   "fastmcp~=2.13.1",
   "meshio>=5.3",
 ]
+
+[project.urls]
+Homepage = "https://github.com/cmudrc/tigl-mcp"
+Repository = "https://github.com/cmudrc/tigl-mcp"
+Issues = "https://github.com/cmudrc/tigl-mcp/issues"
+Documentation = "https://cmudrc.github.io/tigl-mcp/"
 
 [project.optional-dependencies]
 dev = [
@@ -21,25 +34,29 @@ dev = [
   "pytest-cov>=4.1",
   "mypy>=1.11",
   "ruff>=0.6.0",
-  "black>=24.8.0",
+  "sphinx>=8.0",
+  "sphinx-rtd-theme>=3.0.0",
+  "build>=1.2.0",
+  "twine>=5.1.0",
+  "pre-commit>=3.8.0",
 ]
 
 [project.scripts]
 tigl-mcp-server = "tigl_mcp_server.main:main"
 
-[tool.black]
-line-length = 88
-target-version = ["py311"]
-
 [tool.ruff]
 line-length = 88
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "ANN", "C4", "D"]
 ignore = ["D203", "D213"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 warn_return_any = true
 warn_unused_ignores = true
 warn_unused_configs = true
@@ -51,6 +68,11 @@ mypy_path = "src"
 testpaths = ["tests"]
 addopts = "--cov=tigl_mcp_server --cov-report=term-missing"
 pythonpath = ["src"]
+markers = [
+  "examples_smoke: deterministic example smoke tests",
+  "examples_full: extended deterministic example tests",
+  "integration_real: optional tests requiring real CPACS/TiGL assets",
+]
 
 [tool.setuptools.package-dir]
 "" = "src"

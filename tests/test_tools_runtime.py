@@ -1,6 +1,8 @@
-"""End-to-end coverage for the tigl_mcp_server tools."""
+"""End-to-end tool coverage for the deterministic stub-backed runtime."""
 
 from __future__ import annotations
+
+from pathlib import Path
 
 import pytest
 
@@ -20,7 +22,7 @@ def _tool_by_name(tools: list[ToolDefinition], name: str) -> ToolDefinition:
 
 
 def test_open_and_summarize_configuration(sample_cpacs_xml: str) -> None:
-    """Opening a CPACS string registers a session and exposes summaries."""
+    """Opening CPACS XML registers a session and exposes stub summaries."""
     manager = SessionManager()
     tools = build_tools(manager)
     open_tool = _tool_by_name(tools, "open_cpacs")
@@ -45,8 +47,21 @@ def test_open_and_summarize_configuration(sample_cpacs_xml: str) -> None:
         summary_tool.handler({"session_id": session_id})
 
 
+def test_open_cpacs_supports_path_inputs(sample_cpacs_path: Path) -> None:
+    """Path-based opens return the file name in extracted metadata."""
+    manager = SessionManager()
+    open_tool = _tool_by_name(build_tools(manager), "open_cpacs")
+
+    result = open_tool.handler(
+        {"source_type": "path", "source": str(sample_cpacs_path)}
+    )
+
+    assert result["cpacs_metadata"]["file_name"] == str(sample_cpacs_path)
+    assert result["configuration_summary"]["num_wings"] == 1
+
+
 def test_parameter_updates_support_relative_changes(sample_cpacs_xml: str) -> None:
-    """set_high_level_parameters applies relative and absolute updates."""
+    """Parameter mutation uses current deterministic stub values as the baseline."""
     manager = SessionManager()
     open_tool = _tool_by_name(build_tools(manager), "open_cpacs")
     open_result = open_tool.handler(
@@ -64,6 +79,54 @@ def test_parameter_updates_support_relative_changes(sample_cpacs_xml: str) -> No
     )
     assert update_result["new_parameters"]["span"] == pytest.approx(33.0)
     assert update_result["new_parameters"]["area"] == 85.0
+
+
+def test_sampling_and_intersections_return_deterministic_stub_shapes(
+    sample_cpacs_xml: str,
+) -> None:
+    """Sampling and intersections use deterministic stub geometry, not TiGL kernels."""
+    manager = SessionManager()
+    tools = build_tools(manager)
+    open_tool = _tool_by_name(tools, "open_cpacs")
+    sample_tool = _tool_by_name(tools, "sample_component_surface")
+    plane_tool = _tool_by_name(tools, "intersect_with_plane")
+    components_tool = _tool_by_name(tools, "intersect_components")
+
+    open_result = open_tool.handler(
+        {"source_type": "xml_string", "source": sample_cpacs_xml}
+    )
+    session_id = open_result["session_id"]
+
+    sample_result = sample_tool.handler(
+        {
+            "session_id": session_id,
+            "component_uid": "W1",
+            "parameterization": "wing_component_segment_eta_xsi",
+            "samples": [{"eta": 0.5, "xsi": 0.25, "side": "left"}],
+        }
+    )
+    assert sample_result["points"][0]["x"] == pytest.approx(1.5)
+
+    plane_result = plane_tool.handler(
+        {
+            "session_id": session_id,
+            "component_uid": "W1",
+            "plane_point": {"x": 0.0, "y": 0.0, "z": 0.0},
+            "plane_normal": {"nx": 1.0, "ny": 0.0, "nz": 0.0},
+            "n_points_per_curve": 3,
+        }
+    )
+    assert len(plane_result["curves"][0]["points"]) == 3
+
+    component_result = components_tool.handler(
+        {
+            "session_id": session_id,
+            "component_uid_one": "W1",
+            "component_uid_two": "F1",
+            "n_points_per_curve": 4,
+        }
+    )
+    assert len(component_result["curves"][0]["points"]) == 4
 
 
 def test_invalid_session_produces_structured_error() -> None:

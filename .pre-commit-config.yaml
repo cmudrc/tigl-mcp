@@ -1,0 +1,12 @@
+# Pre-commit configuration
+
+default_stages: [pre-commit]
+
+repos:
+  - repo: local
+    hooks:
+      - id: make-ci
+        name: make ci
+        entry: make ci
+        language: system
+        pass_filenames: false

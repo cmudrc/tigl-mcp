@@ -76,7 +76,8 @@ def _export_su2_via_tigl(
     try:
         meshio_module: Any = import_module("meshio")
         stl_bytes = _coerce_mesh_bytes(
-            tigl_handle.exportComponentSTL(component.uid), "STL"  # type: ignore[attr-defined]
+            tigl_handle.exportComponentSTL(component.uid),  # type: ignore[attr-defined]
+            "STL",
         )
     except MCPError:
         raise

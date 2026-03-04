@@ -1,15 +1,16 @@
-name: CI
+name: Examples
 
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  latest:
+  deterministic-examples:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -22,7 +23,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: make dev
+        run: make install-dev
 
-      - name: Run checks
-        run: make ci
+      - name: Run examples suite
+        run: make examples-test

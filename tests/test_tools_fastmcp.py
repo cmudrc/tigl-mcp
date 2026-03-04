@@ -1,4 +1,4 @@
-"""End-to-end coverage for the FastMCP server wrapper."""
+"""FastMCP integration coverage for the deterministic tool runtime."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from tigl_mcp_server.session_manager import SessionManager
 
 @pytest.mark.anyio()
 async def test_fastmcp_server_supports_tool_discovery(sample_cpacs_xml: str) -> None:
-    """The FastMCP server exposes the TiGL toolset via the official protocol."""
+    """The FastMCP surface exposes the current TiGL tool catalog."""
     app, _ = build_fastmcp_app(SessionManager())
 
     async with Client(app) as client:
@@ -40,7 +40,7 @@ async def test_fastmcp_server_supports_tool_discovery(sample_cpacs_xml: str) -> 
 
 @pytest.mark.anyio()
 async def test_fastmcp_propagates_structured_errors() -> None:
-    """Errors raised by tool handlers surface through FastMCP client calls."""
+    """Structured tool errors remain visible through the FastMCP client surface."""
     app, _ = build_fastmcp_app(SessionManager())
 
     async with Client(app) as client:
@@ -55,10 +55,10 @@ async def test_fastmcp_propagates_structured_errors() -> None:
 
 
 @pytest.mark.anyio()
-async def test_fastmcp_server_exposes_all_tool_endpoints(
+async def test_fastmcp_server_exposes_stubbed_export_endpoints(
     sample_cpacs_xml: str,
 ) -> None:
-    """Every server endpoint is callable and returns structured data."""
+    """FastMCP clients can exercise the current stubbed export and metrics tools."""
     app, _ = build_fastmcp_app(SessionManager())
 
     async with Client(app) as client:
@@ -66,12 +66,6 @@ async def test_fastmcp_server_exposes_all_tool_endpoints(
             "open_cpacs", {"source_type": "xml_string", "source": sample_cpacs_xml}
         )
         session_id = open_result.data["session_id"]
-
-        summary = await client.call_tool(
-            "get_configuration_summary", {"session_id": session_id}
-        )
-        assert summary.data["wings"][0]["uid"] == "W1"
-        assert summary.data["fuselages"][0]["uid"] == "F1"
 
         components = await client.call_tool(
             "list_geometric_components", {"session_id": session_id}
@@ -98,40 +92,6 @@ async def test_fastmcp_server_exposes_all_tool_endpoints(
         )
         assert fuselage_summary.data["length"] > 0.0
 
-        surface_sample = await client.call_tool(
-            "sample_component_surface",
-            {
-                "session_id": session_id,
-                "component_uid": "W1",
-                "parameterization": "wing_component_segment_eta_xsi",
-                "samples": [{"eta": 0.5, "xsi": 0.25, "side": "left"}],
-            },
-        )
-        assert surface_sample.data["points"][0]["x"] != 0
-
-        plane_intersection = await client.call_tool(
-            "intersect_with_plane",
-            {
-                "session_id": session_id,
-                "component_uid": "W1",
-                "plane_point": {"x": 0.0, "y": 0.0, "z": 0.0},
-                "plane_normal": {"nx": 1.0, "ny": 0.0, "nz": 0.0},
-                "n_points_per_curve": 3,
-            },
-        )
-        assert len(plane_intersection.data["curves"][0]["points"]) == 3
-
-        component_intersection = await client.call_tool(
-            "intersect_components",
-            {
-                "session_id": session_id,
-                "component_uid_one": "W1",
-                "component_uid_two": "F1",
-                "n_points_per_curve": 4,
-            },
-        )
-        assert len(component_intersection.data["curves"][0]["points"]) == 4
-
         mesh_export = await client.call_tool(
             "export_component_mesh",
             {
@@ -147,23 +107,5 @@ async def test_fastmcp_server_exposes_all_tool_endpoints(
             "export_configuration_cad", {"session_id": session_id, "format": "iges"}
         )
         cad_text = base64.b64decode(cad_export.data["cad_base64"]).decode()
+        assert cad_text.startswith("cad:iges:")
         assert "<cpacs>" in cad_text
-
-        parameter_values = await client.call_tool(
-            "get_high_level_parameters",
-            {"session_id": session_id, "component_uid": "W1"},
-        )
-        assert parameter_values.data["parameters"]["span"] == 30.0
-
-        updated_parameters = await client.call_tool(
-            "set_high_level_parameters",
-            {
-                "session_id": session_id,
-                "component_uid": "W1",
-                "updates": {"area": 82.0},
-            },
-        )
-        assert updated_parameters.data["new_parameters"]["area"] == 82.0
-
-        close_result = await client.call_tool("close_cpacs", {"session_id": session_id})
-        assert close_result.data["success"] is True
