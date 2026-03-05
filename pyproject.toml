@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tigl-mcp"
-version = "0.1.1"
+version = "0.1.2"
 description = "An MCP around the TiGL library"
 authors = [
   { name = "The Design Research Collective", email = "ask-drc@cmu.edu" }
