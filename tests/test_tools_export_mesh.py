@@ -11,6 +11,7 @@ from tigl_mcp.errors import MCPError
 from tigl_mcp.session_manager import SessionManager
 from tigl_mcp.tooling import ToolDefinition
 from tigl_mcp.tools import build_tools
+from tigl_mcp.tools.export import _count_stl_triangles, _looks_like_stl_payload
 
 
 def _tool_by_name(tools: Iterable[ToolDefinition], name: str) -> ToolDefinition:
@@ -30,6 +31,30 @@ def _open_session(manager: SessionManager, cpacs_xml: str) -> str:
     if not isinstance(session_id, str):
         raise AssertionError("Session id must be a string")
     return session_id
+
+
+def test_count_stl_triangles_handles_binary_stl_payload() -> None:
+    """Binary STL payloads return the header triangle count."""
+    binary_stl = b"\x00" * 80 + (2).to_bytes(4, byteorder="little") + (b"\x00" * 100)
+
+    assert _count_stl_triangles(binary_stl) == 2
+
+
+def test_looks_like_stl_payload_accepts_small_valid_ascii_stl() -> None:
+    """Small valid ASCII STL payloads are recognized as real STL."""
+    small_ascii_stl = (
+        b"solid tiny\n"
+        b"facet normal 0 0 0\n"
+        b"  outer loop\n"
+        b"    vertex 0 0 0\n"
+        b"    vertex 0 1 0\n"
+        b"    vertex 1 0 0\n"
+        b"  endloop\n"
+        b"endfacet\n"
+        b"endsolid tiny\n"
+    )
+
+    assert _looks_like_stl_payload(small_ascii_stl) is True
 
 
 def test_export_component_mesh_converts_su2_via_meshio(

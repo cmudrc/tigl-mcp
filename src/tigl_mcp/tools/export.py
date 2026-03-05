@@ -39,14 +39,34 @@ class ExportCadParams(ToolParameters):
 
 def _count_stl_triangles(mesh_bytes: bytes) -> int | None:
     """Count triangles in an ASCII or binary STL payload."""
-    try:
-        text = mesh_bytes.decode("ascii", errors="ignore")
-        count = text.count("endfacet")
-        if count > 0:
-            return count
-    except Exception:
-        pass
+    # ASCII STL
+    text = mesh_bytes.decode("ascii", errors="ignore")
+    ascii_count = text.count("endfacet")
+    if ascii_count > 0:
+        return ascii_count
+
+    # Binary STL: 80-byte header, 4-byte LE triangle count, 50-byte records.
+    if len(mesh_bytes) >= 84:
+        binary_count = int.from_bytes(mesh_bytes[80:84], byteorder="little")
+        expected_len = 84 + (binary_count * 50)
+        if binary_count > 0 and expected_len <= len(mesh_bytes):
+            return binary_count
+
     return None
+
+
+def _looks_like_stl_payload(mesh_bytes: bytes) -> bool:
+    """Heuristic STL validation for exported payloads."""
+    if not mesh_bytes:
+        return False
+    if _count_stl_triangles(mesh_bytes) is not None:
+        return True
+
+    text = mesh_bytes.decode("ascii", errors="ignore").strip()
+    if text.startswith("solid") and "endsolid" in text:
+        return True
+
+    return False
 
 
 def _coerce_mesh_bytes(  # pragma: no cover
@@ -220,9 +240,9 @@ def _export_real_stl_bytes(
 
     try:
         stl_bytes = _export_stl_bytes_via_tigl3(tigl_handle, component)
-        if len(stl_bytes) >= 2048:
+        if _looks_like_stl_payload(stl_bytes):
             return stl_bytes
-        errors.append(f"shape->stl too small ({len(stl_bytes)} B)")
+        errors.append(f"shape->stl not recognized as STL ({len(stl_bytes)} B)")
     except Exception as exc:
         errors.append(f"shape->stl failed: {type(exc).__name__}: {exc}")
 
@@ -592,11 +612,12 @@ def _export_stl_bytes_via_tigl3(  # pragma: no cover
         try:
             stl_path.unlink(missing_ok=True)
             fn(*args)
-            if stl_path.exists() and stl_path.stat().st_size > 2048:
-                return stl_path.read_bytes()
             if stl_path.exists():
+                stl_bytes = stl_path.read_bytes()
+                if _looks_like_stl_payload(stl_bytes):
+                    return stl_bytes
                 errors.append(
-                    f"{method}{args} wrote {stl_path.stat().st_size} bytes (too small)"
+                    f"{method}{args} wrote {len(stl_bytes)} bytes (unrecognized STL)"
                 )
             else:
                 errors.append(f"{method}{args} produced no file")
