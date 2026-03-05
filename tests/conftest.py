@@ -16,11 +16,11 @@ SAMPLE_CPACS_XML = """
         <aircraft>
             <model>
                 <wings>
-                    <wing uid="W1" name="MainWing"
+                    <wing uID="W1" name="MainWing"
                          span="30.0" area="80.0" symmetry="x-z" />
                 </wings>
                 <fuselages>
-                    <fuselage uid="F1" name="Fuse" length="25.0" />
+                    <fuselage uID="F1" name="Fuse" length="25.0" />
                 </fuselages>
             </model>
         </aircraft>

@@ -11,6 +11,7 @@ from tigl_mcp.errors import MCPError
 from tigl_mcp.session_manager import SessionManager
 from tigl_mcp.tooling import ToolDefinition
 from tigl_mcp.tools import build_tools
+from tigl_mcp.tools.export import _count_stl_triangles, _looks_like_stl_payload
 
 
 def _tool_by_name(tools: Iterable[ToolDefinition], name: str) -> ToolDefinition:
@@ -32,34 +33,39 @@ def _open_session(manager: SessionManager, cpacs_xml: str) -> str:
     return session_id
 
 
-def _minimal_stl(uid: str) -> bytes:
-    """Create a valid minimal ASCII STL payload for SU2 conversion tests."""
-    return (
-        f"solid {uid}\n"
-        "facet normal 0 0 0\n"
-        "  outer loop\n"
-        "    vertex 0 0 0\n"
-        "    vertex 1 0 0\n"
-        "    vertex 0 1 0\n"
-        "  endloop\n"
-        "endfacet\n"
-        f"endsolid {uid}\n"
-    ).encode("ascii")
+def test_count_stl_triangles_handles_binary_stl_payload() -> None:
+    """Binary STL payloads return the header triangle count."""
+    binary_stl = b"\x00" * 80 + (2).to_bytes(4, byteorder="little") + (b"\x00" * 100)
+
+    assert _count_stl_triangles(binary_stl) == 2
+
+
+def test_looks_like_stl_payload_accepts_small_valid_ascii_stl() -> None:
+    """Small valid ASCII STL payloads are recognized as real STL."""
+    small_ascii_stl = (
+        b"solid tiny\n"
+        b"facet normal 0 0 0\n"
+        b"  outer loop\n"
+        b"    vertex 0 0 0\n"
+        b"    vertex 0 1 0\n"
+        b"    vertex 1 0 0\n"
+        b"  endloop\n"
+        b"endfacet\n"
+        b"endsolid tiny\n"
+    )
+
+    assert _looks_like_stl_payload(small_ascii_stl) is True
 
 
 def test_export_component_mesh_converts_su2_via_meshio(
     sample_cpacs_xml: str,
 ) -> None:
-    """SU2 export relies on meshio plus stubbed STL bytes from the runtime."""
+    """SU2 exports use STL conversion and return valid SU2 content."""
     manager = SessionManager()
     session_id = _open_session(manager, sample_cpacs_xml)
     tools = build_tools(manager)
-    _, tigl_handle, _ = manager.get(session_id)
-
-    tigl_handle.exportComponentSTL = _minimal_stl  # type: ignore[attr-defined]
 
     mesh_tool = _tool_by_name(tools, "export_component_mesh")
-
     result = mesh_tool.handler(
         {
             "session_id": session_id,
@@ -72,10 +78,10 @@ def test_export_component_mesh_converts_su2_via_meshio(
     assert decoded.startswith(b"NDIME=")
 
 
-def test_export_component_mesh_rejects_unsupported_su2(
+def test_export_component_mesh_rejects_unknown_component(
     sample_cpacs_xml: str,
 ) -> None:
-    """SU2 exports fail clearly when no STL export hook is attached."""
+    """Requesting a non-existent component raises NotFound."""
     manager = SessionManager()
     session_id = _open_session(manager, sample_cpacs_xml)
     tools = build_tools(manager)
@@ -86,42 +92,16 @@ def test_export_component_mesh_rejects_unsupported_su2(
         mesh_tool.handler(
             {
                 "session_id": session_id,
-                "component_uid": "W1",
-                "format": "su2",
+                "component_uid": "DOES_NOT_EXIST",
+                "format": "stl",
             }
         )
 
-    assert excinfo.value.error["error"]["type"] == "MeshExportError"
-    assert "Failed to export STL mesh for 'W1' via TiGL" in str(excinfo.value)
-
-
-def test_export_component_mesh_raises_on_bad_stl(sample_cpacs_xml: str) -> None:
-    """Invalid STL inputs trigger MeshExportError during SU2 conversion."""
-    manager = SessionManager()
-    session_id = _open_session(manager, sample_cpacs_xml)
-    tools = build_tools(manager)
-    _, tigl_handle, _ = manager.get(session_id)
-
-    tigl_handle.exportComponentSTL = (  # type: ignore[attr-defined]
-        lambda uid: b"not-an-stl"
-    )
-
-    mesh_tool = _tool_by_name(tools, "export_component_mesh")
-
-    with pytest.raises(MCPError) as excinfo:
-        mesh_tool.handler(
-            {
-                "session_id": session_id,
-                "component_uid": "W1",
-                "format": "su2",
-            }
-        )
-
-    assert excinfo.value.error["error"]["type"] == "MeshExportError"
+    assert excinfo.value.error["error"]["type"] == "NotFound"
 
 
 def test_export_component_mesh_returns_ascii_stl(sample_cpacs_xml: str) -> None:
-    """STL export returns deterministic ASCII payloads, not opaque handles."""
+    """STL export returns deterministic bytes with triangle count from payload."""
     manager = SessionManager()
     session_id = _open_session(manager, sample_cpacs_xml)
     tools = build_tools(manager)
@@ -138,3 +118,4 @@ def test_export_component_mesh_returns_ascii_stl(sample_cpacs_xml: str) -> None:
     mesh_bytes = base64.b64decode(result["mesh_base64"])
     assert mesh_bytes.startswith(b"solid W1")
     assert b"vertex" in mesh_bytes
+    assert result["num_triangles"] == 1

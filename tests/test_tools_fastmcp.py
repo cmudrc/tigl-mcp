@@ -107,5 +107,8 @@ async def test_fastmcp_server_exposes_stubbed_export_endpoints(
             "export_configuration_cad", {"session_id": session_id, "format": "iges"}
         )
         cad_text = base64.b64decode(cad_export.data["cad_base64"]).decode()
+        cpacs_text = base64.b64decode(cad_export.data["cpacs_xml_base64"]).decode()
         assert cad_text.startswith("cad:iges:")
+        assert cad_export.data["source"] == "stub"
         assert "<cpacs>" in cad_text
+        assert "<cpacs>" in cpacs_text

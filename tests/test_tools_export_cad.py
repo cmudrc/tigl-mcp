@@ -20,7 +20,7 @@ def _tool_by_name(tools: list[ToolDefinition], name: str) -> ToolDefinition:
 def test_export_configuration_cad_includes_cpacs_contents(
     sample_cpacs_xml: str,
 ) -> None:
-    """CAD export returns the stub payload plus the original CPACS XML."""
+    """CAD export returns strict shape plus CPACS payload."""
     manager = SessionManager()
     tools = build_tools(manager)
 
@@ -34,6 +34,9 @@ def test_export_configuration_cad_includes_cpacs_contents(
 
     result = export_tool.handler({"session_id": session_id, "format": "step"})
 
-    decoded = base64.b64decode(result["cad_base64"]).decode()
-    assert decoded.startswith("cad:step:")
-    assert sample_cpacs_xml in decoded
+    decoded_cad = base64.b64decode(result["cad_base64"]).decode()
+    decoded_cpacs = base64.b64decode(result["cpacs_xml_base64"]).decode()
+
+    assert result["source"] == "stub"
+    assert decoded_cad.startswith("cad:step:")
+    assert decoded_cpacs == sample_cpacs_xml
