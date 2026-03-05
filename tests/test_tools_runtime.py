@@ -129,6 +129,22 @@ def test_sampling_and_intersections_return_deterministic_stub_shapes(
     assert len(component_result["curves"][0]["points"]) == 4
 
 
+def test_component_lookup_is_case_insensitive(sample_cpacs_xml: str) -> None:
+    """Tool handlers resolve component IDs case-insensitively."""
+    manager = SessionManager()
+    tools = build_tools(manager)
+    open_tool = _tool_by_name(tools, "open_cpacs")
+    metadata_tool = _tool_by_name(tools, "get_component_metadata")
+
+    open_result = open_tool.handler(
+        {"source_type": "xml_string", "source": sample_cpacs_xml}
+    )
+    session_id = open_result["session_id"]
+
+    metadata = metadata_tool.handler({"session_id": session_id, "component_uid": "w1"})
+    assert metadata["uid"] == "W1"
+
+
 def test_invalid_session_produces_structured_error() -> None:
     """Missing sessions raise MCPError with structured payload."""
     manager = SessionManager()

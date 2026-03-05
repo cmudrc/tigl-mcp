@@ -25,6 +25,37 @@ def test_parse_cpacs_extracts_stub_components(sample_cpacs_xml: str) -> None:
     assert fuselage.parameters["length"] == 25.0
 
 
+def test_parse_cpacs_accepts_camel_case_uid_attribute() -> None:
+    """CPACS camelCase ``uID`` attributes are treated as primary identifiers."""
+    xml = """
+    <cpacs>
+      <vehicles>
+        <aircraft>
+          <model>
+            <wings>
+              <wing uID="WingCamelCase" span="1.0" />
+            </wings>
+          </model>
+        </aircraft>
+      </vehicles>
+    </cpacs>
+    """.strip()
+    config = parse_cpacs(xml)
+
+    assert config.wings[0].uid == "WingCamelCase"
+
+
+def test_find_component_supports_case_insensitive_lookup(
+    sample_cpacs_xml: str,
+) -> None:
+    """Component lookup falls back to case-insensitive matching."""
+    config = parse_cpacs(sample_cpacs_xml)
+    component = config.find_component("w1")
+
+    assert component is not None
+    assert component.uid == "W1"
+
+
 def test_extract_metadata_reads_header_fields(sample_cpacs_xml: str) -> None:
     """Metadata extraction uses CPACS header content plus the optional file name."""
     metadata = extract_metadata(sample_cpacs_xml, "fixture.cpacs.xml")
