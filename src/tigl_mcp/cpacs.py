@@ -87,9 +87,13 @@ class CPACSConfiguration:
         )
 
     def find_component(self, uid: str) -> ComponentDefinition | None:
-        """Locate a component by UID."""
+        """Locate a component by UID (exact match first, then case-insensitive)."""
         for component in self.all_components():
             if component.uid == uid:
+                return component
+        uid_lower = uid.lower()
+        for component in self.all_components():
+            if component.uid.lower() == uid_lower:
                 return component
         return None
 
@@ -139,12 +143,13 @@ def _parse_components(root: ET.Element, tag: str) -> list[ComponentDefinition]:
     """Parse CPACS components of a given tag."""
     components: list[ComponentDefinition] = []
     for index, element in enumerate(root.findall(f".//{tag}"), start=1):
-        uid = element.get("uid") or f"{tag}_{index}"
+        # CPACS commonly uses "uID" while fixtures may use lowercase "uid".
+        uid = element.get("uID") or element.get("uid") or f"{tag}_{index}"
         name = element.get("name") or uid
         symmetry = element.get("symmetry")
         parameters: dict[str, float] = {}
         for attr, raw in element.attrib.items():
-            if attr in {"uid", "name", "symmetry"}:
+            if attr in {"uid", "uID", "name", "symmetry"}:
                 continue
             try:
                 parameters[attr] = float(raw)
