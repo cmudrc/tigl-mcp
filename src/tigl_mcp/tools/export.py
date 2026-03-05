@@ -536,7 +536,9 @@ def export_configuration_cad_tool(session_manager: SessionManager) -> ToolDefini
                 session_manager, params.session_id
             )
 
-            cpacs_xml = getattr(tixi_handle, "xml_content", "") or ""
+            cpacs_xml = session_manager.get_cpacs_xml(params.session_id)
+            if not cpacs_xml:
+                cpacs_xml = getattr(tixi_handle, "xml_content", "") or ""
             cpacs_xml_base64 = base64.b64encode(cpacs_xml.encode("utf-8")).decode(
                 "utf-8"
             )
@@ -667,13 +669,17 @@ def _export_stl_bytes_via_tigl3(  # pragma: no cover
                 if out is not None:
                     return out
 
-        for method, args in [
-            ("exportMeshedGeometrySTL", (str(stl_path), deflection)),
-            ("exportMeshedGeometrySTL", (str(stl_path),)),
-        ]:
-            out = _try(method, *args)
-            if out is not None:
-                return out
+        if callable(getattr(tigl, "exportMeshedGeometrySTL", None)):
+            errors.append(
+                "exportMeshedGeometrySTL exports full configuration; skipped for "
+                "component export."
+            )
+
+        if not errors:
+            errors.append(
+                f"No component-specific STL export methods for '{component.uid}' "
+                f"({component.type_name})."
+            )
 
         raise_mcp_error(
             "MeshExportError",

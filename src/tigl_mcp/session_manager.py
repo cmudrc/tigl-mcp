@@ -17,6 +17,7 @@ class SessionData:
     tixi_handle: TixiDocument
     tigl_handle: TiglConfiguration
     config: CPACSConfiguration
+    cpacs_xml: str
 
 
 class SessionManager:
@@ -32,12 +33,16 @@ class SessionManager:
         tixi_handle: TixiDocument,
         tigl_handle: TiglConfiguration,
         config: CPACSConfiguration,
+        cpacs_xml: str,
     ) -> str:
         """Register a new session and return its identifier."""
         session_id = str(uuid.uuid4())
         with self._lock:
             self._sessions[session_id] = SessionData(
-                tixi_handle=tixi_handle, tigl_handle=tigl_handle, config=config
+                tixi_handle=tixi_handle,
+                tigl_handle=tigl_handle,
+                config=config,
+                cpacs_xml=cpacs_xml,
             )
         return session_id
 
@@ -50,6 +55,14 @@ class SessionManager:
                 raise MCPError("InvalidSession", f"Unknown session_id '{session_id}'")
             data = self._sessions[session_id]
         return data.tixi_handle, data.tigl_handle, data.config
+
+    def get_cpacs_xml(self, session_id: str) -> str:
+        """Retrieve the original CPACS XML for a session."""
+        with self._lock:
+            if session_id not in self._sessions:
+                raise MCPError("InvalidSession", f"Unknown session_id '{session_id}'")
+            data = self._sessions[session_id]
+        return data.cpacs_xml
 
     def close(self, session_id: str) -> None:
         """Close and remove a session."""

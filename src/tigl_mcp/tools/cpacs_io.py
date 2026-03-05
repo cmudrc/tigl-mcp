@@ -78,7 +78,7 @@ def open_cpacs_tool(session_manager: SessionManager) -> ToolDefinition:
                 tixi_handle, tigl_handle, _, _ = build_handles(xml_content, file_name)
 
             session_id = session_manager.create_session(
-                tixi_handle, tigl_handle, cpacs_config
+                tixi_handle, tigl_handle, cpacs_config, xml_content
             )
             summary = {
                 "num_wings": len(cpacs_config.wings),
