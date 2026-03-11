@@ -22,6 +22,7 @@ from tigl_mcp.tools.parameters import (
     get_high_level_parameters_tool,
     set_high_level_parameters_tool,
 )
+from tigl_mcp.tools.ping import ping_tool
 from tigl_mcp.tools.sampling import (
     intersect_components_tool,
     intersect_with_plane_tool,
@@ -32,6 +33,7 @@ from tigl_mcp.tools.sampling import (
 def build_tools(session_manager: SessionManager) -> list[ToolDefinition]:
     """Instantiate all tool definitions with the provided session manager."""
     return [
+        ping_tool(session_manager),
         open_cpacs_tool(session_manager),
         close_cpacs_tool(session_manager),
         get_configuration_summary_tool(session_manager),

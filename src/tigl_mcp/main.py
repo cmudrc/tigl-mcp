@@ -45,6 +45,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Register tools and start the FastMCP server."""
+    raw = list(argv) if argv is not None else __import__("sys").argv[1:]
+    if raw and raw[0] == "check-runtime":
+        from tigl_mcp.runtime_check import print_runtime_report
+
+        print_runtime_report()
+        return 0
+
     parser = build_parser()
     args = parser.parse_args(argv)
 

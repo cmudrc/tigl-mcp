@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tigl-mcp"
-version = "0.1.2"
+version = "0.2.0"
 description = "An MCP around the TiGL library"
 authors = [
   { name = "The Design Research Collective", email = "ask-drc@cmu.edu" }
@@ -43,6 +43,7 @@ dev = [
 
 [project.scripts]
 tigl-mcp = "tigl_mcp.main:main"
+tigl-mcp-check = "tigl_mcp.runtime_check:print_runtime_report"
 
 [tool.ruff]
 line-length = 88
