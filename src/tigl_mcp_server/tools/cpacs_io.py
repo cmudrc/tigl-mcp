@@ -17,6 +17,12 @@ try:  # real bindings (preferred)
 except Exception:  # pragma: no cover
     tixi3wrapper = None  # type: ignore[assignment]
     tigl3wrapper = None  # type: ignore[assignment]
+    import logging as _logging
+
+    _logging.getLogger(__name__).info(
+        "TiGL/TiXI bindings not found — running in stub mode. "
+        "For real geometry export, run: tigl-mcp-server check-runtime"
+    )
 
 
 class OpenCpacsParams(ToolParameters):

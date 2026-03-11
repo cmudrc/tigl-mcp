@@ -26,6 +26,7 @@ dev = [
 
 [project.scripts]
 tigl-mcp-server = "tigl_mcp_server.main:main"
+tigl-mcp-check = "tigl_mcp_server.runtime_check:print_runtime_report"
 
 [tool.black]
 line-length = 88

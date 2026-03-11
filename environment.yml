@@ -1,0 +1,19 @@
+name: tigl-mcp
+channels:
+  - dlr-sc
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - tigl3
+  - tixi3
+  - python-tigl3
+  - python-tixi3
+  - pythonocc-core
+  - gmsh
+  - python-gmsh
+  - meshio
+  - numpy
+  - pip
+  - pip:
+      - -e .
