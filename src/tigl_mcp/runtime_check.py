@@ -5,7 +5,6 @@ from __future__ import annotations
 import shutil
 import sys
 
-
 CONDA_INSTALL_CMD = (
     "conda install -c dlr-sc -c conda-forge tigl3 tixi3 python-tigl3 python-tixi3"
 )
@@ -50,7 +49,8 @@ def check_tigl_runtime() -> dict[str, object]:
         from tixi3 import tixi3wrapper  # type: ignore[import-untyped]
 
         tixi_h = tixi3wrapper.Tixi3()
-        results["tixi3"] = {"available": True, "version": getattr(tixi_h, "version", "unknown")}
+        ver = getattr(tixi_h, "version", "unknown")
+        results["tixi3"] = {"available": True, "version": ver}
     except Exception as exc:
         results["tixi3"] = {"available": False, "error": str(exc)}
 
@@ -64,7 +64,9 @@ def check_tigl_runtime() -> dict[str, object]:
 
     # OpenCASCADE (used for watertight STEP export)
     try:
-        from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_MakeSolid  # type: ignore[import-untyped]  # noqa: F401
+        from OCC.Core.BRepBuilderAPI import (
+            BRepBuilderAPI_MakeSolid,  # type: ignore[import-untyped]  # noqa: F401
+        )
 
         results["opencascade"] = {"available": True}
     except Exception as exc:

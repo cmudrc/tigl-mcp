@@ -14,6 +14,7 @@ def test_build_tools_registers_expected_stub_toolset() -> None:
     tools = build_tools(SessionManager())
 
     assert [tool.name for tool in tools] == [
+        "ping",
         "open_cpacs",
         "close_cpacs",
         "get_configuration_summary",

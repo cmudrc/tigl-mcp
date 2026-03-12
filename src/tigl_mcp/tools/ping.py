@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING
 
 from tigl_mcp.tooling import ToolDefinition, ToolParameters
+
+if TYPE_CHECKING:
+    from tigl_mcp.session_manager import SessionManager
 
 
 class PingParams(ToolParameters):
@@ -14,10 +17,12 @@ class PingParams(ToolParameters):
     message: str | None = None
 
 
-def ping_tool(_session_manager: Any = None) -> ToolDefinition:
-    """Build a ping tool definition (session_manager is accepted but unused)."""
+def ping_tool(
+    _session_manager: SessionManager,
+) -> ToolDefinition:
+    """Build a ping tool definition."""
 
-    def handler(params: dict[str, Any]) -> dict[str, Any]:
+    def handler(params: dict[str, object]) -> dict[str, object]:
         now = datetime.now(UTC).isoformat()
         reply = params.get("message") or "pong"
         return {
@@ -27,9 +32,15 @@ def ping_tool(_session_manager: Any = None) -> ToolDefinition:
             "timestamp": now,
         }
 
+    _ping_desc = (
+        "Lightweight health check that confirms the server"
+        " is reachable without requiring a CPACS session"
+        " or TiGL runtime."
+    )
+
     return ToolDefinition(
         name="ping",
-        description="Lightweight health check that confirms the server is reachable without requiring a CPACS session or TiGL runtime.",
+        description=_ping_desc,
         parameters_model=PingParams,
         handler=handler,
         output_schema={
@@ -38,8 +49,16 @@ def ping_tool(_session_manager: Any = None) -> ToolDefinition:
                 "ok": {"type": "boolean"},
                 "message": {"type": "string"},
                 "server": {"type": "string"},
-                "timestamp": {"type": "string", "format": "date-time"},
+                "timestamp": {
+                    "type": "string",
+                    "format": "date-time",
+                },
             },
-            "required": ["ok", "message", "server", "timestamp"],
+            "required": [
+                "ok",
+                "message",
+                "server",
+                "timestamp",
+            ],
         },
     )
