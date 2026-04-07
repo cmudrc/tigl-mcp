@@ -72,6 +72,43 @@ make docs
 - Geometry values are intentionally simplified; they reflect the current stub
   contract rather than full native TiGL fidelity.
 
+## Shared-CPACS Integration
+
+This MCP includes a **CPACS adapter** (`src/tigl_mcp/cpacs_adapter.py`) that
+bridges TiGL to the shared-CPACS aircraft analysis pipeline.
+
+### What it does
+
+The adapter reads CPACS geometry (wings, fuselages, profiles) and writes
+analysis results — component counts, bounding boxes, and STEP export metadata
+— into `//analysisResults/tigl`.
+
+| Direction | XPath |
+|-----------|-------|
+| **Reads** | `.//vehicles/aircraft/model`, `.//vehicles/profiles` |
+| **Writes** | `.//vehicles/aircraft/model/analysisResults/tigl` |
+
+### Running as part of the pipeline
+
+```bash
+# As part of the full 4-MCP pipeline (with SU2, pyCycle, Mission)
+python pipeline/shared_cpacs_orchestrator.py D150_v30.xml --mcps tigl su2 pycycle mission
+
+# TiGL only
+python pipeline/shared_cpacs_orchestrator.py D150_v30.xml --mcps tigl
+```
+
+See [cmudrc/aircraft-analysis](https://github.com/cmudrc/aircraft-analysis) for
+full pipeline documentation, versioning details, and installation instructions.
+
+### Related MCP servers
+
+| MCP | Repository |
+|-----|-----------|
+| SU2 (CFD aerodynamics) | [cmudrc/su2-mcp](https://github.com/cmudrc/su2-mcp) |
+| pyCycle (engine cycle) | [cmudrc/pycycle-mcp](https://github.com/cmudrc/pycycle-mcp) |
+| Mission (trajectory/fuel) | [cmudrc/mission-mcp](https://github.com/cmudrc/mission-mcp) |
+
 ## Contributing
 
 Contribution guidelines live in [`CONTRIBUTING.md`](CONTRIBUTING.md).
