@@ -8,8 +8,6 @@ libraries aren't available), and writes analysis results back into
 
 from __future__ import annotations
 
-import base64
-import json
 import logging
 import subprocess
 import tempfile
@@ -17,7 +15,7 @@ from pathlib import Path
 from typing import Any
 from xml.etree import ElementTree as ET
 
-from tigl_mcp.cpacs import build_handles, parse_cpacs
+from tigl_mcp.cpacs import build_handles
 
 LOGGER = logging.getLogger(__name__)
 
@@ -31,21 +29,23 @@ def read_from_cpacs(cpacs_xml: str) -> dict[str, Any]:
 
     components = []
     for comp in configuration.all_components():
-        components.append({
-            "uid": comp.uid,
-            "name": comp.name,
-            "type": comp.type_name,
-            "index": comp.index,
-            "symmetry": comp.symmetry,
-            "bounding_box": {
-                "xmin": comp.bounding_box.xmin,
-                "xmax": comp.bounding_box.xmax,
-                "ymin": comp.bounding_box.ymin,
-                "ymax": comp.bounding_box.ymax,
-                "zmin": comp.bounding_box.zmin,
-                "zmax": comp.bounding_box.zmax,
-            },
-        })
+        components.append(
+            {
+                "uid": comp.uid,
+                "name": comp.name,
+                "type": comp.type_name,
+                "index": comp.index,
+                "symmetry": comp.symmetry,
+                "bounding_box": {
+                    "xmin": comp.bounding_box.xmin,
+                    "xmax": comp.bounding_box.xmax,
+                    "ymin": comp.bounding_box.ymin,
+                    "ymax": comp.bounding_box.ymax,
+                    "zmin": comp.bounding_box.zmin,
+                    "zmax": comp.bounding_box.zmax,
+                },
+            }
+        )
 
     root = ET.fromstring(cpacs_xml)
     ref_area_el = root.find(".//vehicles/aircraft/model/reference/area")
@@ -58,8 +58,12 @@ def read_from_cpacs(cpacs_xml: str) -> dict[str, Any]:
         "rotor_count": len(configuration.rotors),
         "engine_count": len(configuration.engines),
         "components": components,
-        "ref_area_m2": float(ref_area_el.text) if ref_area_el is not None and ref_area_el.text else None,
-        "ref_length_m": float(ref_length_el.text) if ref_length_el is not None and ref_length_el.text else None,
+        "ref_area_m2": float(ref_area_el.text)
+        if ref_area_el is not None and ref_area_el.text
+        else None,
+        "ref_length_m": float(ref_length_el.text)
+        if ref_length_el is not None and ref_length_el.text
+        else None,
     }
 
 
@@ -73,7 +77,9 @@ def _try_export_step_via_docker(
     """
     try:
         proc = subprocess.run(
-            ["docker", "info"], capture_output=True, timeout=5,
+            ["docker", "info"],
+            capture_output=True,
+            timeout=5,
         )
         if proc.returncode != 0:
             LOGGER.debug("Docker not available")
@@ -83,7 +89,9 @@ def _try_export_step_via_docker(
 
     proc = subprocess.run(
         ["docker", "images", "-q", docker_image],
-        capture_output=True, text=True, timeout=5,
+        capture_output=True,
+        text=True,
+        timeout=5,
     )
     if not proc.stdout.strip():
         LOGGER.debug("Docker image %s not found", docker_image)
@@ -112,18 +120,27 @@ def _try_export_step_via_docker(
         try:
             result = subprocess.run(
                 [
-                    "docker", "run", "--rm",
-                    "-v", f"{tmpdir}:/work",
+                    "docker",
+                    "run",
+                    "--rm",
+                    "-v",
+                    f"{tmpdir}:/work",
                     docker_image,
-                    "python", "-c", script,
+                    "python",
+                    "-c",
+                    script,
                 ],
-                capture_output=True, text=True, timeout=120,
+                capture_output=True,
+                text=True,
+                timeout=120,
             )
             step_path = Path(tmpdir) / "output.step"
             if result.returncode == 0 and step_path.exists():
                 step_bytes = step_path.read_bytes()
                 if step_bytes.lstrip().startswith(b"ISO-10303-21"):
-                    LOGGER.info("STEP export via Docker succeeded (%d bytes)", len(step_bytes))
+                    LOGGER.info(
+                        "STEP export via Docker succeeded (%d bytes)", len(step_bytes)
+                    )
                     return step_bytes
                 LOGGER.warning("Docker produced non-STEP output")
             else:
@@ -157,10 +174,14 @@ def export_step(
 
     try:
         from tigl_mcp.cpacs import build_handles
+
         _, tigl_handle, _, _ = build_handles(cpacs_xml, None)
 
-        if hasattr(tigl_handle, 'exportFusedSTEP') or hasattr(tigl_handle, 'exportSTEP'):
+        if hasattr(tigl_handle, "exportFusedSTEP") or hasattr(
+            tigl_handle, "exportSTEP"
+        ):
             from tigl_mcp.tools.export import _export_configuration_cad_bytes_via_tigl
+
             step_bytes = _export_configuration_cad_bytes_via_tigl(tigl_handle, "step")
             if step_bytes and step_bytes.lstrip().startswith(b"ISO-10303-21"):
                 return step_bytes, "tigl_native"

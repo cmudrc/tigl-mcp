@@ -25,4 +25,4 @@ jobs:
         run: pip install pytest
 
       - name: Run OVS checks
-        run: PYTHONPATH=src pytest tests/test_ovs_cpacs.py -v
+        run: PYTHONPATH=src pytest tests/test_ovs_cpacs.py -v -o "addopts="
