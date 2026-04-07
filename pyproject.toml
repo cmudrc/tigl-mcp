@@ -69,6 +69,11 @@ strict = true
 exclude = ["^build/"]
 mypy_path = "src"
 
+[[tool.mypy.overrides]]
+module = ["tigl_mcp.cpacs_adapter"]
+ignore_missing_imports = true
+disallow_untyped_defs = false
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--cov=tigl_mcp --cov-report=term-missing"
