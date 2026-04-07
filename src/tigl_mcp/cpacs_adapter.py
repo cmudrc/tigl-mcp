@@ -87,13 +87,13 @@ def _try_export_step_via_docker(
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return None
 
-    proc = subprocess.run(
+    proc2 = subprocess.run(
         ["docker", "images", "-q", docker_image],
         capture_output=True,
         text=True,
         timeout=5,
     )
-    if not proc.stdout.strip():
+    if not proc2.stdout.strip():
         LOGGER.debug("Docker image %s not found", docker_image)
         return None
 
@@ -188,9 +188,9 @@ def export_step(
     except Exception as exc:
         LOGGER.debug("Native TiGL STEP export not available: %s", exc)
 
-    step_bytes = _try_export_step_via_docker(cpacs_xml, docker_image)
-    if step_bytes:
-        return step_bytes, "docker_tigl"
+    docker_step = _try_export_step_via_docker(cpacs_xml, docker_image)
+    if docker_step:
+        return docker_step, "docker_tigl"
 
     return None, "unavailable"
 
