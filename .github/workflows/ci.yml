@@ -9,20 +9,40 @@ permissions:
   contents: read
 
 jobs:
-  latest:
-    runs-on: ubuntu-latest
+  qa:
+    name: ${{ matrix.os }} / py${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.12", "3.13"]
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python }}
           cache: pip
 
-      - name: Install dependencies
-        run: make dev
+      - name: Install package + dev deps
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
 
-      - name: Run checks
+      - name: Ruff lint (cross-platform)
+        run: python -m ruff check .
+
+      - name: OVS structural test (cross-platform)
+        env:
+          PYTHONPATH: src
+        run: python -m pytest tests/test_ovs_cpacs.py -q -o "addopts="
+
+      - name: Mypy (Linux + py3.12 only)
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
+        run: python -m mypy src
+
+      - name: Full CI -- solver-integration tests (Linux + py3.12 only)
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
         run: make ci
