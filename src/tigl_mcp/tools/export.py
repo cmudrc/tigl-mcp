@@ -35,6 +35,7 @@ class ExportCadParams(ToolParameters):
 
     session_id: str
     format: Literal["step", "iges"]
+    component_uid: str | None = None  # If set, export only this component (single solid STEP).
 
 
 def _count_stl_triangles(mesh_bytes: bytes) -> int | None:
@@ -450,6 +451,125 @@ def _make_closed_solid_step(  # pragma: no cover
     return status == 1 and out_path.exists() and out_path.stat().st_size > 0
 
 
+def _make_single_component_step(  # pragma: no cover
+    tigl_handle: object,
+    component: ComponentDefinition,
+    out_path: Path,
+) -> bool:
+    """Export one wing or fuselage as a single solid STEP (for Gmsh box-minus-solid)."""
+    try:
+        brep_algo_api = import_module("OCC.Core.BRepAlgoAPI")
+        brep_builder_api = import_module("OCC.Core.BRepBuilderAPI")
+        shape_fix_api = import_module("OCC.Core.ShapeFix")
+        step_control_api = import_module("OCC.Core.STEPControl")
+        top_abs_api = import_module("OCC.Core.TopAbs")
+        top_exp_api = import_module("OCC.Core.TopExp")
+        topo_ds_api = import_module("OCC.Core.TopoDS")
+        tigl_configuration_api = import_module("tigl3.configuration")
+    except Exception:
+        return False
+
+    BRepAlgoAPI_Fuse = brep_algo_api.BRepAlgoAPI_Fuse
+    BRepBuilderAPI_MakeSolid = brep_builder_api.BRepBuilderAPI_MakeSolid
+    ShapeFix_Shell = shape_fix_api.ShapeFix_Shell
+    STEPControl_AsIs = step_control_api.STEPControl_AsIs
+    STEPControl_Writer = step_control_api.STEPControl_Writer
+    TopAbs_SHELL = top_abs_api.TopAbs_SHELL
+    TopExp_Explorer = top_exp_api.TopExp_Explorer
+    topods = topo_ds_api.topods
+    CCPACSConfigurationManager_get_instance = (
+        tigl_configuration_api.CCPACSConfigurationManager_get_instance
+    )
+
+    handle_val = getattr(tigl_handle, "_handle", None)
+    if handle_val is None:
+        return False
+    handle_int = getattr(handle_val, "value", handle_val)
+
+    try:
+        config_manager = CCPACSConfigurationManager_get_instance()
+        config = config_manager.get_configuration(handle_int)
+    except Exception:
+        return False
+
+    solids: list[Any] = []
+
+    def _shells_to_solids(shape: object) -> None:
+        explorer = TopExp_Explorer(shape, TopAbs_SHELL)
+        while explorer.More():
+            shell = topods.Shell(explorer.Current())
+            if not shell.Closed():
+                fixer = ShapeFix_Shell(shell)
+                fixer.Perform()
+                shell = fixer.Shell()
+            maker = BRepBuilderAPI_MakeSolid(shell)
+            if maker.IsDone():
+                solids.append(maker.Solid())
+            explorer.Next()
+
+    type_lower = (component.type_name or "").lower()
+    idx = int(component.index)
+    if "wing" in type_lower and 1 <= idx <= config.get_wing_count():
+        wing = config.get_wing(idx)
+        _shells_to_solids(wing.get_loft().shape())
+        try:
+            mirrored = wing.get_mirrored_loft()
+            if mirrored is not None:
+                _shells_to_solids(mirrored.shape())
+        except Exception:
+            pass
+    elif "fuselage" in type_lower and 1 <= idx <= config.get_fuselage_count():
+        fuselage = config.get_fuselage(idx)
+        _shells_to_solids(fuselage.get_loft().shape())
+        try:
+            mirrored = fuselage.get_mirrored_loft()
+            if mirrored is not None:
+                _shells_to_solids(mirrored.shape())
+        except Exception:
+            pass
+    else:
+        return False
+
+    if not solids:
+        return False
+
+    fused = solids[0]
+    for solid in solids[1:]:
+        fuser = BRepAlgoAPI_Fuse(fused, solid)
+        if fuser.IsDone():
+            fused = fuser.Shape()
+
+    writer = STEPControl_Writer()
+    writer.Transfer(fused, STEPControl_AsIs)
+    status = writer.Write(str(out_path))
+    return status == 1 and out_path.exists() and out_path.stat().st_size > 0
+
+
+def _export_single_component_cad(
+    tigl_handle: object,
+    component: ComponentDefinition,
+    cad_format: str,
+) -> bytes:
+    """Export one component as a single solid STEP; only STEP is supported."""
+    if cad_format != "step":
+        raise_mcp_error(
+            "CadExportError",
+            "Single-component export is only supported for format 'step'.",
+        )
+    with tempfile.NamedTemporaryFile(suffix=".step", delete=False) as file_obj:
+        out_path = Path(file_obj.name)
+    try:
+        out_path.unlink(missing_ok=True)
+        if not _make_single_component_step(tigl_handle, component, out_path):
+            raise_mcp_error(
+                "CadExportError",
+                f"Could not export single solid STEP for component '{component.uid}'.",
+            )
+        return out_path.read_bytes()
+    finally:
+        out_path.unlink(missing_ok=True)
+
+
 def _export_configuration_cad_bytes_via_tigl(
     tigl_handle: object, cad_format: str
 ) -> bytes:  # pragma: no cover
@@ -532,7 +652,7 @@ def export_configuration_cad_tool(session_manager: SessionManager) -> ToolDefini
     def handler(raw_params: dict[str, object]) -> dict[str, object]:
         try:
             params = ExportCadParams.model_validate(raw_params)
-            tixi_handle, tigl_handle, _ = require_session(
+            tixi_handle, tigl_handle, config = require_session(
                 session_manager, params.session_id
             )
 
@@ -553,7 +673,18 @@ def export_configuration_cad_tool(session_manager: SessionManager) -> ToolDefini
                 )
             )
 
-            if export_capable:
+            if params.component_uid and export_capable:
+                component = config.find_component(params.component_uid)
+                if component is None:
+                    raise_mcp_error(
+                        "NotFound",
+                        f"Component '{params.component_uid}' not found.",
+                    )
+                cad_bytes = _export_single_component_cad(
+                    tigl_handle, component, params.format
+                )
+                source = "tigl_single_component"
+            elif export_capable:
                 cad_bytes = _export_configuration_cad_bytes_via_tigl(
                     tigl_handle, params.format
                 )
@@ -578,7 +709,7 @@ def export_configuration_cad_tool(session_manager: SessionManager) -> ToolDefini
 
     return ToolDefinition(
         name="export_configuration_cad",
-        description="Export the full configuration CAD and return it encoded.",
+        description="Export the full configuration CAD (or a single component when component_uid is set) and return it encoded.",
         parameters_model=ExportCadParams,
         handler=handler,
         output_schema={},

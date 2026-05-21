@@ -12,6 +12,7 @@ import requests
 MCP_ENDPOINT = os.environ.get("MCP_ENDPOINT", "http://127.0.0.1:8000/mcp")
 CPACS_PATH = os.environ["CPACS_PATH"]
 OUTPUT_PATH = os.environ.get("OUT", "aircraft.step")
+COMPONENT_UID = os.environ.get("COMPONENT_UID")  # If set, export only this component (single solid STEP).
 
 
 if not OUTPUT_PATH.lower().endswith((".step", ".stp")):
@@ -44,7 +45,7 @@ def _post_json(
         MCP_ENDPOINT,
         headers=headers,
         data=json.dumps(payload),
-        timeout=60,
+        timeout=300,
     )
     lines = [line for line in response.text.splitlines() if line.startswith("data: ")]
     if not lines:
@@ -126,10 +127,13 @@ def main() -> None:
     if not isinstance(session_id, str):
         raise SystemExit("open_cpacs did not return a string session_id")
 
+    export_args: dict[str, object] = {"session_id": session_id, "format": "step"}
+    if COMPONENT_UID:
+        export_args["component_uid"] = COMPONENT_UID
     export_result = _call_tool(
         headers,
         "export_configuration_cad",
-        {"session_id": session_id, "format": "step"},
+        export_args,
         request_id=3,
     )
 
