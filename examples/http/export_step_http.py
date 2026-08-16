@@ -12,7 +12,8 @@ import requests
 MCP_ENDPOINT = os.environ.get("MCP_ENDPOINT", "http://127.0.0.1:8000/mcp")
 CPACS_PATH = os.environ["CPACS_PATH"]
 OUTPUT_PATH = os.environ.get("OUT", "aircraft.step")
-COMPONENT_UID = os.environ.get("COMPONENT_UID")  # If set, export only this component (single solid STEP).
+# If set, export only this component as a single solid STEP.
+COMPONENT_UID = os.environ.get("COMPONENT_UID")
 
 
 if not OUTPUT_PATH.lower().endswith((".step", ".stp")):

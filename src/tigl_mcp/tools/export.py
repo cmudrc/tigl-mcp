@@ -35,7 +35,8 @@ class ExportCadParams(ToolParameters):
 
     session_id: str
     format: Literal["step", "iges"]
-    component_uid: str | None = None  # If set, export only this component (single solid STEP).
+    # If set, export only this component as a single solid STEP.
+    component_uid: str | None = None
 
 
 def _count_stl_triangles(mesh_bytes: bytes) -> int | None:
@@ -729,7 +730,10 @@ def export_configuration_cad_tool(session_manager: SessionManager) -> ToolDefini
 
     return ToolDefinition(
         name="export_configuration_cad",
-        description="Export the full configuration CAD (or a single component when component_uid is set) and return it encoded.",
+        description=(
+            "Export the full configuration CAD (or a single component when "
+            "component_uid is set) and return it encoded."
+        ),
         parameters_model=ExportCadParams,
         handler=handler,
         output_schema={},

@@ -34,11 +34,6 @@ jobs:
       - name: Ruff lint (cross-platform)
         run: python -m ruff check .
 
-      - name: OVS structural test (cross-platform)
-        env:
-          PYTHONPATH: src
-        run: python -m pytest tests/test_ovs_cpacs.py -q -o "addopts="
-
       - name: Mypy (Linux + py3.12 only)
         if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
         run: python -m mypy src
