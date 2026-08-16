@@ -46,7 +46,7 @@ def check_tigl_runtime() -> dict[str, object]:
 
     # TiXI
     try:
-        from tixi3 import tixi3wrapper  # type: ignore[import-untyped]
+        from tixi3 import tixi3wrapper
 
         tixi_h = tixi3wrapper.Tixi3()
         ver = getattr(tixi_h, "version", "unknown")
@@ -56,7 +56,7 @@ def check_tigl_runtime() -> dict[str, object]:
 
     # TiGL
     try:
-        from tigl3 import tigl3wrapper  # type: ignore[import-untyped]
+        from tigl3 import tigl3wrapper
 
         results["tigl3"] = {"available": True, "module": tigl3wrapper.__name__}
     except Exception as exc:
@@ -65,7 +65,7 @@ def check_tigl_runtime() -> dict[str, object]:
     # OpenCASCADE (used for watertight STEP export)
     try:
         from OCC.Core.BRepBuilderAPI import (
-            BRepBuilderAPI_MakeSolid,  # type: ignore[import-untyped]  # noqa: F401
+            BRepBuilderAPI_MakeSolid,  # noqa: F401
         )
 
         results["opencascade"] = {"available": True}
@@ -75,7 +75,7 @@ def check_tigl_runtime() -> dict[str, object]:
     # Gmsh (used for meshing in the pipeline)
     gmsh_bin = shutil.which("gmsh")
     try:
-        import gmsh as _gmsh  # type: ignore[import-untyped]  # noqa: F401
+        import gmsh as _gmsh  # noqa: F401
 
         results["gmsh"] = {
             "available": True,

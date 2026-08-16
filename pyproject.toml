@@ -73,6 +73,14 @@ mypy_path = "src"
 module = ["tigl_mcp.cpacs_adapter"]
 follow_imports = "skip"
 
+# The native geometry stack ships no type stubs and is not installed in CI,
+# where only the pure-Python surface is checked. runtime_check.py imports these
+# deliberately inside try/except to report what is present on the host, so a
+# missing import is the expected case rather than an error.
+[[tool.mypy.overrides]]
+module = ["tixi3.*", "tigl3.*", "OCC.*", "gmsh"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--cov=tigl_mcp --cov-report=term-missing"
