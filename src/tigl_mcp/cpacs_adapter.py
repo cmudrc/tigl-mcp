@@ -27,6 +27,10 @@ def read_from_cpacs(cpacs_xml: str) -> dict[str, Any]:
     """
     _, _, configuration, metadata = build_handles(cpacs_xml, None)
 
+    # Only facts stated in the CPACS file are reported here. Bounding boxes are
+    # deliberately absent: CPACS does not carry them, and deriving one needs a
+    # real TiGL kernel. Writing an estimate into the shared document would put
+    # an untraceable number into the digital thread.
     components = []
     for comp in configuration.all_components():
         components.append(
@@ -36,14 +40,8 @@ def read_from_cpacs(cpacs_xml: str) -> dict[str, Any]:
                 "type": comp.type_name,
                 "index": comp.index,
                 "symmetry": comp.symmetry,
-                "bounding_box": {
-                    "xmin": comp.bounding_box.xmin,
-                    "xmax": comp.bounding_box.xmax,
-                    "ymin": comp.bounding_box.ymin,
-                    "ymax": comp.bounding_box.ymax,
-                    "zmin": comp.bounding_box.zmin,
-                    "zmax": comp.bounding_box.zmax,
-                },
+                "section_count": comp.section_count,
+                "segment_count": comp.segment_count,
             }
         )
 
@@ -101,20 +99,18 @@ def _try_export_step_via_docker(
         cpacs_path = Path(tmpdir) / "input.xml"
         cpacs_path.write_text(cpacs_xml, encoding="utf-8")
 
+        # Drive the real TiGL library directly rather than importing this
+        # package from inside the image. The container only has to provide a
+        # working tigl3/tixi3 runtime, so it stays valid as this package
+        # evolves.
         script = (
-            "import json, base64, sys; "
-            "sys.path.insert(0, '/app/src'); "
-            "from tigl_mcp.session_manager import SessionManager; "
-            "from tigl_mcp.tools.export import export_configuration_cad_tool; "
-            "from tigl_mcp.tools.cpacs_io import open_cpacs_tool; "
-            "sm = SessionManager(); "
-            "open_fn = open_cpacs_tool(sm); "
-            "r = open_fn.handler({'source_type': 'path', 'source': '/work/input.xml'}); "
-            "sid = r['session_id']; "
-            "export_fn = export_configuration_cad_tool(sm); "
-            "r2 = export_fn.handler({'session_id': sid, 'format': 'step'}); "
-            "print(json.dumps({'source': r2.get('source'), 'cad_base64': r2.get('cad_base64', '')[:100]+'...'})); "
-            "with open('/work/output.step', 'wb') as f: f.write(base64.b64decode(r2['cad_base64'])); "
+            "from tixi3 import tixi3wrapper; "
+            "from tigl3 import tigl3wrapper; "
+            "tixi = tixi3wrapper.Tixi3(); "
+            "tixi.open('/work/input.xml'); "
+            "tigl = tigl3wrapper.Tigl3(); "
+            "tigl.open(tixi, ''); "
+            "tigl.exportFusedSTEP('/work/output.step'); "
         )
 
         try:
@@ -123,6 +119,10 @@ def _try_export_step_via_docker(
                     "docker",
                     "run",
                     "--rm",
+                    # The image is linux/amd64; be explicit so Apple Silicon
+                    # hosts emulate instead of warning about the mismatch.
+                    "--platform",
+                    "linux/amd64",
                     "-v",
                     f"{tmpdir}:/work",
                     docker_image,
@@ -228,6 +228,14 @@ def write_to_cpacs(cpacs_xml: str, results: dict[str, Any]) -> str:
         ET.SubElement(comp_el, "uid").text = comp["uid"]
         ET.SubElement(comp_el, "name").text = comp.get("name", comp["uid"])
         ET.SubElement(comp_el, "type").text = comp.get("type", "unknown")
+        for key, tag in (
+            ("section_count", "sectionCount"),
+            ("segment_count", "segmentCount"),
+        ):
+            if comp.get(key) is not None:
+                ET.SubElement(comp_el, tag).text = str(comp[key])
+        # A boundingBox element is written only when a real geometry kernel
+        # produced one. It is omitted rather than estimated.
         if comp.get("bounding_box"):
             bb = comp["bounding_box"]
             bb_el = ET.SubElement(comp_el, "boundingBox")

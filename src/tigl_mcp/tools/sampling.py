@@ -1,13 +1,30 @@
-"""Surface sampling and intersection tools."""
+"""Surface sampling and intersection tools.
+
+Sampling a point on a component surface, or intersecting a component with a
+plane or another component, are boundary-representation operations. They need
+the actual lofted surfaces that TiGL builds from the CPACS profiles; the XML
+alone cannot answer them. Until a real TiGL kernel is wired in, these tools
+raise a structured ``GeometryUnavailable`` error rather than returning points
+that lie on nothing, per the project's no-stubs rule.
+"""
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Literal
 
 from tigl_mcp.errors import MCPError, raise_mcp_error
 from tigl_mcp.session_manager import SessionManager
 from tigl_mcp.tooling import ToolDefinition, ToolParameters
 from tigl_mcp.tools.common import require_session
+
+#: Guidance returned with every GeometryUnavailable error.
+_TIGL_REQUIRED = (
+    "This operation requires a real TiGL kernel. Native bindings (tigl3/tixi3) "
+    "are not importable in this environment. Install TiGL "
+    "(https://github.com/DLR-SC/tigl), or use export_configuration_cad, which "
+    "runs real TiGL via the tigl-mcp:dev Docker image and returns STEP "
+    "geometry you can intersect or sample downstream."
+)
 
 
 class SampleSurfaceParams(ToolParameters):
@@ -56,21 +73,12 @@ def sample_component_surface_tool(session_manager: SessionManager) -> ToolDefini
                 raise_mcp_error(
                     "NotFound", f"Component '{params.component_uid}' not found"
                 )
-            bbox = component.bounding_box
-            points = []
-            for sample in params.samples:
-                eta_raw: Any = sample.get("eta", 0.0)
-                xsi_raw: Any = sample.get("xsi", 0.0)
-                side = sample.get("side")
-                eta = float(eta_raw)
-                xsi = float(xsi_raw)
-                x = bbox.xmin + (bbox.xmax - bbox.xmin) * eta
-                y = bbox.ymin + (bbox.ymax - bbox.ymin) * xsi
-                z = bbox.zmin + (bbox.zmax - bbox.zmin) * (eta + xsi) / 2.0
-                points.append(
-                    {"eta": eta, "xsi": xsi, "side": side, "x": x, "y": y, "z": z}
-                )
-            return {"points": points}
+            raise_mcp_error(
+                "GeometryUnavailable",
+                f"Cannot sample the surface of '{component.uid}' without a real "
+                "geometry kernel.",
+                _TIGL_REQUIRED,
+            )
         except MCPError as error:
             raise error
         except Exception as exc:  # pragma: no cover - defensive path
@@ -91,18 +99,18 @@ def intersect_with_plane_tool(session_manager: SessionManager) -> ToolDefinition
     def handler(raw_params: dict[str, object]) -> dict[str, list[dict[str, object]]]:
         try:
             params = IntersectPlaneParams.model_validate(raw_params)
-            _, _, _ = require_session(session_manager, params.session_id)
-            curve_points = []
-            for index in range(params.n_points_per_curve):
-                t = index / max(params.n_points_per_curve - 1, 1)
-                curve_points.append(
-                    {
-                        "x": params.plane_point["x"] + params.plane_normal["nx"] * t,
-                        "y": params.plane_point["y"] + params.plane_normal["ny"] * t,
-                        "z": params.plane_point["z"] + params.plane_normal["nz"] * t,
-                    }
+            _, _, config = require_session(session_manager, params.session_id)
+            component = config.find_component(params.component_uid)
+            if component is None:
+                raise_mcp_error(
+                    "NotFound", f"Component '{params.component_uid}' not found"
                 )
-            return {"curves": [{"curve_index": 0, "points": curve_points}]}
+            raise_mcp_error(
+                "GeometryUnavailable",
+                f"Cannot intersect '{component.uid}' with a plane without a real "
+                "geometry kernel.",
+                _TIGL_REQUIRED,
+            )
         except MCPError as error:
             raise error
         except Exception as exc:  # pragma: no cover - defensive path
@@ -132,22 +140,12 @@ def intersect_components_tool(session_manager: SessionManager) -> ToolDefinition
                 raise_mcp_error(
                     "NotFound", "One or both components could not be located"
                 )
-            midpoint = {
-                "x": (first.bounding_box.xmin + second.bounding_box.xmax) / 2.0,
-                "y": (first.bounding_box.ymin + second.bounding_box.ymax) / 2.0,
-                "z": (first.bounding_box.zmin + second.bounding_box.zmax) / 2.0,
-            }
-            curve_points = []
-            for index in range(params.n_points_per_curve):
-                t = index / max(params.n_points_per_curve - 1, 1)
-                curve_points.append(
-                    {
-                        "x": midpoint["x"] * (1 + 0.1 * t),
-                        "y": midpoint["y"] * (1 - 0.1 * t),
-                        "z": midpoint["z"] + t,
-                    }
-                )
-            return {"curves": [{"curve_index": 0, "points": curve_points}]}
+            raise_mcp_error(
+                "GeometryUnavailable",
+                f"Cannot intersect '{first.uid}' with '{second.uid}' without a "
+                "real geometry kernel.",
+                _TIGL_REQUIRED,
+            )
         except MCPError as error:
             raise error
         except Exception as exc:  # pragma: no cover - defensive path

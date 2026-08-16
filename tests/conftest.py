@@ -6,6 +6,13 @@ from pathlib import Path
 
 import pytest
 
+# Note on the span/area attributes below: real CPACS does not store span or
+# area as attributes on <wing>; they live in the section and positioning
+# geometry. They are kept here only because the high-level-parameter tools read
+# numeric attributes generically, and those tests need something to read. Do
+# not treat this fixture as a model of real CPACS layout. The sections and
+# segments elements below *are* realistic, and are what the component counters
+# parse.
 SAMPLE_CPACS_XML = """
 <cpacs>
     <header>
@@ -17,10 +24,31 @@ SAMPLE_CPACS_XML = """
             <model>
                 <wings>
                     <wing uID="W1" name="MainWing"
-                         span="30.0" area="80.0" symmetry="x-z" />
+                         span="30.0" area="80.0" symmetry="x-z">
+                        <sections>
+                            <section uID="W1_sec1" />
+                            <section uID="W1_sec2" />
+                            <section uID="W1_sec3" />
+                        </sections>
+                        <segments>
+                            <segment uID="W1_seg1" />
+                            <segment uID="W1_seg2" />
+                        </segments>
+                        <componentSegments>
+                            <componentSegment uID="W1_cseg1" />
+                        </componentSegments>
+                    </wing>
                 </wings>
                 <fuselages>
-                    <fuselage uID="F1" name="Fuse" length="25.0" />
+                    <fuselage uID="F1" name="Fuse" length="25.0">
+                        <sections>
+                            <section uID="F1_sec1" />
+                            <section uID="F1_sec2" />
+                        </sections>
+                        <segments>
+                            <segment uID="F1_seg1" />
+                        </segments>
+                    </fuselage>
                 </fuselages>
             </model>
         </aircraft>

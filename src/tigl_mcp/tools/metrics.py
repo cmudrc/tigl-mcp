@@ -1,4 +1,11 @@
-"""Tools that compute simplified geometric metrics."""
+"""Tools that report geometric metrics for CPACS components.
+
+Span, area, aspect ratio, MAC, and fuselage length cannot be read out of CPACS
+XML. They are results of evaluating the profile geometry through the
+positioning and transformation chain, which is TiGL's job. Until a real TiGL
+kernel is wired in, these tools raise a structured ``GeometryUnavailable``
+error rather than returning an approximation, per the project's no-stubs rule.
+"""
 
 from __future__ import annotations
 
@@ -7,6 +14,15 @@ from tigl_mcp.errors import MCPError, raise_mcp_error
 from tigl_mcp.session_manager import SessionManager
 from tigl_mcp.tooling import ToolDefinition, ToolParameters
 from tigl_mcp.tools.common import require_session
+
+#: Guidance returned with every GeometryUnavailable error.
+_TIGL_REQUIRED = (
+    "This value requires a real TiGL kernel. Native bindings (tigl3/tixi3) are "
+    "not importable in this environment. Install TiGL "
+    "(https://github.com/DLR-SC/tigl), or use export_configuration_cad, which "
+    "runs real TiGL via the tigl-mcp:dev Docker image and returns STEP "
+    "geometry you can measure."
+)
 
 
 class WingSummaryParams(ToolParameters):
@@ -40,36 +56,14 @@ def get_wing_summary_tool(session_manager: SessionManager) -> ToolDefinition:
         try:
             params = WingSummaryParams.model_validate(raw_params)
             _, _, config = require_session(session_manager, params.session_id)
+            # Resolve first, so an unknown UID still reports NotFound.
             component = _safe_get_component(config, params.wing_uid, "Wing")
-            span = component.parameters.get("span", 20.0 + component.index)
-            reference_area = component.parameters.get("area", span * 0.8)
-            half_span = span / 2.0
-            top_area = reference_area * 0.5 if reference_area else None
-            aspect_ratio = (span**2) / reference_area if reference_area else None
-            mac_length = component.parameters.get("mac_length")
-            sweep = component.parameters.get("sweep")
-            dihedral = component.parameters.get("dihedral")
-            mac_quarter_chord = {
-                "x": component.bounding_box.xmin
-                + 0.25 * (component.bounding_box.xmax - component.bounding_box.xmin),
-                "y": component.bounding_box.ymin
-                + 0.25 * (component.bounding_box.ymax - component.bounding_box.ymin),
-                "z": component.bounding_box.zmin
-                + 0.25 * (component.bounding_box.zmax - component.bounding_box.zmin),
-            }
-            return {
-                "span": span,
-                "half_span": half_span,
-                "reference_area": reference_area,
-                "wetted_area": component.parameters.get("wetted_area"),
-                "top_area": top_area,
-                "aspect_ratio": aspect_ratio,
-                "mac_length": mac_length,
-                "mac_quarter_chord": mac_quarter_chord,
-                "sweep_deg": sweep,
-                "dihedral_deg": dihedral,
-                "symmetry": component.symmetry,
-            }
+            raise_mcp_error(
+                "GeometryUnavailable",
+                f"Cannot compute wing metrics for '{component.uid}' without a "
+                "real geometry kernel.",
+                _TIGL_REQUIRED,
+            )
         except MCPError as error:
             raise error
         except Exception as exc:  # pragma: no cover - defensive path
@@ -94,18 +88,12 @@ def get_fuselage_summary_tool(session_manager: SessionManager) -> ToolDefinition
             params = FuselageSummaryParams.model_validate(raw_params)
             _, _, config = require_session(session_manager, params.session_id)
             component = _safe_get_component(config, params.fuselage_uid, "Fuselage")
-            length = component.parameters.get("length", 15.0 + component.index)
-            wetted_area = component.parameters.get("wetted_area")
-            max_cross_section_area = component.parameters.get("max_cross_section_area")
-            max_diameter = component.parameters.get("max_diameter")
-            approx_volume = component.parameters.get("volume")
-            return {
-                "length": length,
-                "wetted_area": wetted_area,
-                "max_cross_section_area": max_cross_section_area,
-                "max_diameter": max_diameter,
-                "approx_volume": approx_volume,
-            }
+            raise_mcp_error(
+                "GeometryUnavailable",
+                f"Cannot compute fuselage metrics for '{component.uid}' without "
+                "a real geometry kernel.",
+                _TIGL_REQUIRED,
+            )
         except MCPError as error:
             raise error
         except Exception as exc:  # pragma: no cover - defensive path

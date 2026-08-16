@@ -8,6 +8,16 @@ from tigl_mcp.session_manager import SessionManager
 from tigl_mcp.tooling import ToolDefinition, ToolParameters
 from tigl_mcp.tools.common import format_bounding_box, require_session
 
+#: Explanation attached whenever a bounding box is reported as ``null``. CPACS
+#: alone does not carry bounding boxes; they must be evaluated from the profile
+#: geometry by a real kernel. Saying so explicitly stops a caller reading the
+#: null as "the component has no extent".
+NO_GEOMETRY_NOTE = (
+    "Bounding boxes are not computed from CPACS XML. They require a real TiGL "
+    "kernel to evaluate the profile geometry through the transformation chain. "
+    "Use export_configuration_cad for real geometry."
+)
+
 
 class SessionOnlyParams(ToolParameters):
     """Parameters that only require a session identifier."""
@@ -66,13 +76,16 @@ def get_configuration_summary_tool(session_manager: SessionManager) -> ToolDefin
                 {"uid": engine.uid, "name": engine.name, "index": engine.index}
                 for engine in config.engines
             ]
-            return {
+            summary: dict[str, object] = {
                 "wings": wings,
                 "fuselages": fuselages,
                 "rotors": rotors,
                 "engines": engines,
                 "bounding_box": bounding_box,
             }
+            if bounding_box is None:
+                summary["bounding_box_note"] = NO_GEOMETRY_NOTE
+            return summary
         except MCPError as error:
             raise error
         except Exception as exc:  # pragma: no cover - defensive path
@@ -148,17 +161,17 @@ def get_component_metadata_tool(session_manager: SessionManager) -> ToolDefiniti
             }
             if component.type_name.lower() == "wing":
                 metadata["wing_data"] = {
-                    "num_sections": component.parameters.get("sections", 0),
-                    "num_segments": component.parameters.get("segments", 0),
-                    "num_component_segments": component.parameters.get(
-                        "component_segments", 0
-                    ),
+                    "num_sections": component.section_count,
+                    "num_segments": component.segment_count,
+                    "num_component_segments": component.component_segment_count,
                 }
             if component.type_name.lower() == "fuselage":
                 metadata["fuselage_data"] = {
-                    "num_segments": component.parameters.get("segments", 0)
+                    "num_sections": component.section_count,
+                    "num_segments": component.segment_count,
                 }
-            metadata["bounding_box"] = format_bounding_box(component.bounding_box)
+            if metadata["bounding_box"] is None:
+                metadata["bounding_box_note"] = NO_GEOMETRY_NOTE
             return metadata
         except MCPError as error:
             raise error

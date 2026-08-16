@@ -1,4 +1,4 @@
-"""FastMCP integration coverage for the deterministic tool runtime."""
+"""FastMCP integration coverage for the tool runtime."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import base64
 
 import pytest
 from fastmcp.client import Client
+from fastmcp.exceptions import ToolError
 
 from tigl_mcp.fastmcp_adapter import build_fastmcp_app
 from tigl_mcp.session_manager import SessionManager
@@ -55,10 +56,10 @@ async def test_fastmcp_propagates_structured_errors() -> None:
 
 
 @pytest.mark.anyio()
-async def test_fastmcp_server_exposes_stubbed_export_endpoints(
+async def test_fastmcp_server_exposes_export_endpoints(
     sample_cpacs_xml: str,
 ) -> None:
-    """FastMCP clients can exercise the current stubbed export and metrics tools."""
+    """FastMCP clients see real counts, and errors where a kernel is needed."""
     app, _ = build_fastmcp_app(SessionManager())
 
     async with Client(app) as client:
@@ -79,18 +80,22 @@ async def test_fastmcp_server_exposes_stubbed_export_endpoints(
             "get_component_metadata",
             {"session_id": session_id, "component_uid": "W1"},
         )
-        assert wing_metadata.data["wing_data"]["num_segments"] == 0
+        # Counts are parsed from the file, so they reflect the fixture.
+        assert wing_metadata.data["wing_data"]["num_sections"] == 3
+        assert wing_metadata.data["wing_data"]["num_segments"] == 2
+        assert wing_metadata.data["bounding_box"] is None
 
-        wing_summary = await client.call_tool(
-            "get_wing_summary", {"session_id": session_id, "wing_uid": "W1"}
-        )
-        assert wing_summary.data["span"] > 0.0
-
-        fuselage_summary = await client.call_tool(
-            "get_fuselage_summary",
-            {"session_id": session_id, "fuselage_uid": "F1"},
-        )
-        assert fuselage_summary.data["length"] > 0.0
+        # Metrics need a real kernel, so over MCP they surface as tool errors
+        # rather than plausible-looking numbers.
+        for tool_name, payload in (
+            ("get_wing_summary", {"session_id": session_id, "wing_uid": "W1"}),
+            (
+                "get_fuselage_summary",
+                {"session_id": session_id, "fuselage_uid": "F1"},
+            ),
+        ):
+            with pytest.raises(ToolError, match="without a real geometry kernel"):
+                await client.call_tool(tool_name, payload)
 
         mesh_export = await client.call_tool(
             "export_component_mesh",

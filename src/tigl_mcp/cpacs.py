@@ -1,9 +1,15 @@
 """Utility models and parsing helpers for CPACS content.
 
-This module offers lightweight stand-ins for TiXI/TiGL objects. The goal is to
-provide predictable behavior in test environments while preserving the shape of
-the real APIs. Geometry calculations are intentionally simplified; the focus is
-on producing deterministic, well-structured JSON for the MCP tools.
+This module reads facts that are stated directly in the CPACS XML: component
+UIDs, names, symmetry flags, and section/segment counts. Those are real values
+taken from the file.
+
+It deliberately computes **no** geometry. Deriving a span, an area, a bounding
+box, or a surface point from CPACS requires evaluating the profile geometry
+through the positioning and transformation chain, which is what TiGL exists to
+do. Anything here that needs geometry reports it as unavailable rather than
+approximating it, so a caller can never mistake an estimate for a TiGL result.
+See ``tigl_mcp.cpacs_adapter.export_step`` for the real-TiGL path.
 """
 
 from __future__ import annotations
@@ -25,25 +31,17 @@ class BoundingBox:
     zmax: float
 
     @classmethod
-    def from_index(cls, index: int) -> BoundingBox:
-        """Create a simple bounding box derived from an index."""
-        base = float(index)
-        return cls(
-            xmin=base,
-            xmax=base + 1.0,
-            ymin=-base,
-            ymax=base + 0.5,
-            zmin=-0.25 * (base + 1.0),
-            zmax=0.25 * (base + 1.0),
-        )
+    def combine(cls, boxes: Iterable[BoundingBox | None]) -> BoundingBox | None:
+        """Combine bounding boxes into a single envelope.
 
-    @classmethod
-    def combine(cls, boxes: Iterable[BoundingBox]) -> BoundingBox:
-        """Combine multiple bounding boxes into a single envelope."""
-        boxes = list(boxes)
-        if not boxes:
-            return cls(0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+        Returns ``None`` when no real box is available, rather than an empty
+        box at the origin, which would read as a genuine measurement.
+        """
+        real = [box for box in boxes if box is not None]
+        if not real:
+            return None
 
+        boxes = real
         return cls(
             xmin=min(box.xmin for box in boxes),
             xmax=max(box.xmax for box in boxes),
@@ -56,7 +54,11 @@ class BoundingBox:
 
 @dataclass
 class ComponentDefinition:
-    """Description of a CPACS component."""
+    """Description of a CPACS component.
+
+    Every field here is read from the CPACS file. ``bounding_box`` is ``None``
+    unless a real geometry kernel supplied one; it is never estimated.
+    """
 
     uid: str
     name: str
@@ -64,7 +66,10 @@ class ComponentDefinition:
     type_name: str
     symmetry: str | None
     parameters: dict[str, float]
-    bounding_box: BoundingBox
+    section_count: int = 0
+    segment_count: int = 0
+    component_segment_count: int = 0
+    bounding_box: BoundingBox | None = None
 
 
 @dataclass
@@ -80,8 +85,8 @@ class CPACSConfiguration:
         """Return all components in a single list."""
         return [*self.wings, *self.fuselages, *self.rotors, *self.engines]
 
-    def bounding_box(self) -> BoundingBox:
-        """Envelope covering all components."""
+    def bounding_box(self) -> BoundingBox | None:
+        """Envelope covering all components, or ``None`` if none is known."""
         return BoundingBox.combine(
             component.bounding_box for component in self.all_components()
         )
@@ -139,10 +144,45 @@ class TiglConfiguration:
         return len(self.cpacs_configuration.engines)
 
 
-def _parse_components(root: ET.Element, tag: str) -> list[ComponentDefinition]:
+def _count_children(element: ET.Element, container: str, child: str) -> int:
+    """Count ``container/child`` entries directly under a component element."""
+    holder = element.find(container)
+    if holder is None:
+        return 0
+    return len(holder.findall(child))
+
+
+def _find_component_elements(
+    root: ET.Element, container: str, tag: str
+) -> list[ET.Element]:
+    """Locate aircraft components, excluding tool-specific extension blocks.
+
+    A bare ``.//wing`` search is wrong: CPACS files carry vendor blocks under
+    ``toolspecific/`` that use the same element names. The D150 has three
+    wings and one fuselage, but ``.//wing`` matches five and ``.//fuselage``
+    two, because ``toolspecific/paramamSBot`` and ``toolspecific/boxBeam``
+    each contain their own ``<wing>``. Requiring the plural container, and
+    preferring the aircraft model subtree, keeps the count to real components.
+    """
+    model = root.find(".//vehicles/aircraft/model")
+    if model is not None:
+        holder = model.find(container)
+        if holder is not None:
+            return holder.findall(tag)
+        return []
+    # Fragment or non-standard root: still require the plural container, which
+    # is what excludes the toolspecific blocks.
+    return root.findall(f".//{container}/{tag}")
+
+
+def _parse_components(
+    root: ET.Element, container: str, tag: str
+) -> list[ComponentDefinition]:
     """Parse CPACS components of a given tag."""
     components: list[ComponentDefinition] = []
-    for index, element in enumerate(root.findall(f".//{tag}"), start=1):
+    for index, element in enumerate(
+        _find_component_elements(root, container, tag), start=1
+    ):
         # CPACS commonly uses "uID" while fixtures may use lowercase "uid".
         uid = element.get("uID") or element.get("uid") or f"{tag}_{index}"
         name = element.get("name") or uid
@@ -163,7 +203,14 @@ def _parse_components(root: ET.Element, tag: str) -> list[ComponentDefinition]:
                 type_name=tag.capitalize(),
                 symmetry=symmetry,
                 parameters=parameters,
-                bounding_box=BoundingBox.from_index(index),
+                section_count=_count_children(element, "sections", "section"),
+                segment_count=_count_children(element, "segments", "segment"),
+                component_segment_count=_count_children(
+                    element, "componentSegments", "componentSegment"
+                ),
+                # No bounding box: computing one needs the profile geometry
+                # evaluated through the transformation chain, i.e. TiGL.
+                bounding_box=None,
             )
         )
     return components
@@ -172,10 +219,10 @@ def _parse_components(root: ET.Element, tag: str) -> list[ComponentDefinition]:
 def parse_cpacs(xml_content: str) -> CPACSConfiguration:
     """Parse CPACS XML content into a configuration representation."""
     root = ET.fromstring(xml_content)
-    wings = _parse_components(root, "wing")
-    fuselages = _parse_components(root, "fuselage")
-    rotors = _parse_components(root, "rotor")
-    engines = _parse_components(root, "engine")
+    wings = _parse_components(root, "wings", "wing")
+    fuselages = _parse_components(root, "fuselages", "fuselage")
+    rotors = _parse_components(root, "rotors", "rotor")
+    engines = _parse_components(root, "engines", "engine")
     return CPACSConfiguration(
         wings=wings, fuselages=fuselages, rotors=rotors, engines=engines
     )

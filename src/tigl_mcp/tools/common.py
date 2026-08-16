@@ -37,8 +37,16 @@ def require_session(
         raise_mcp_error("SessionError", "Failed to access session", str(exc))
 
 
-def format_bounding_box(box: BoundingBox | BoundingBoxDict) -> BoundingBoxDict:
-    """Normalize bounding box objects to dictionaries."""
+def format_bounding_box(
+    box: BoundingBox | BoundingBoxDict | None,
+) -> BoundingBoxDict | None:
+    """Normalize bounding box objects to dictionaries.
+
+    ``None`` in means ``None`` out: no geometry kernel supplied a box, and an
+    absent measurement must stay absent rather than becoming zeros.
+    """
+    if box is None:
+        return None
     if isinstance(box, BoundingBox):
         return {
             "xmin": box.xmin,
