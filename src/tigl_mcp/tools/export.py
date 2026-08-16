@@ -108,7 +108,9 @@ def _ensure_export_supported(
 
 
 def _export_su2_via_tigl(
-    tigl_handle: TiglConfiguration, component: ComponentDefinition
+    tigl_handle: TiglConfiguration,
+    component: ComponentDefinition,
+    cpacs_xml: str = "",
 ) -> bytes:
     """Export SU2 mesh bytes using TiGL STL export combined with meshio conversion."""
     try:
@@ -116,7 +118,7 @@ def _export_su2_via_tigl(
         if _has_real_tigl_exports(tigl_handle):
             stl_bytes = _export_stl_bytes_via_tigl3(tigl_handle, component)
         else:
-            stl_bytes = _synthetic_mesh_bytes("stl", component)
+            stl_bytes = _export_mesh_via_docker_or_fail(component, "stl", cpacs_xml)
     except MCPError:
         raise
     except Exception as exc:  # pragma: no cover - defensive path
@@ -177,41 +179,6 @@ def _export_su2_via_tigl(
     return su2_bytes
 
 
-def _synthetic_mesh_bytes(
-    mesh_format: MeshFormat, component: ComponentDefinition
-) -> bytes:
-    """Generate deterministic, format-like mesh payloads for supported formats."""
-    if mesh_format == "stl":
-        return (
-            f"solid {component.uid}\n"
-            "  facet normal 0 0 0\n"
-            "    outer loop\n"
-            "      vertex 0 0 0\n"
-            "      vertex 0 1 0\n"
-            "      vertex 1 0 0\n"
-            "    endloop\n"
-            "  endfacet\n"
-            f"endsolid {component.uid}\n"
-        ).encode("ascii")
-    if mesh_format == "vtk":
-        return (
-            "# vtk DataFile Version 3.0\n"
-            f"component {component.uid}\n"
-            "ASCII\n"
-            "DATASET POLYDATA\n"
-            "POINTS 0 float\n"
-        ).encode("ascii")
-    if mesh_format == "collada":
-        return (
-            '<?xml version="1.0" encoding="UTF-8"?>'
-            "<COLLADA><asset/><library_geometries>"
-            f'<geometry id="{component.uid}" name="{component.uid}"/>'
-            "</library_geometries></COLLADA>"
-        ).encode("ascii")
-
-    _raise_unsupported_format(mesh_format, component.uid)
-
-
 def _has_real_tigl_exports(tigl_handle: object) -> bool:
     """Check whether the handle has real TiGL export methods (vs stub)."""
     export_methods = (
@@ -254,19 +221,53 @@ def _export_real_stl_bytes(
     )
 
 
+def _export_mesh_via_docker_or_fail(
+    component: ComponentDefinition,
+    mesh_format: str,
+    cpacs_xml: str,
+) -> bytes:
+    """Mesh one component with containerised TiGL, or raise a structured error.
+
+    This replaces a synthetic payload that returned the same single triangle
+    for every component and every aircraft.
+    """
+    from tigl_mcp.cpacs_adapter import _try_export_mesh_via_docker
+
+    mesh_bytes = (
+        _try_export_mesh_via_docker(
+            cpacs_xml, component.uid, component.type_name, mesh_format
+        )
+        if cpacs_xml
+        else None
+    )
+    if mesh_bytes is None:
+        raise_mcp_error(
+            "MeshExportUnavailable",
+            f"Cannot mesh '{component.uid}' as {mesh_format.upper()}: no TiGL "
+            "kernel is available.",
+            "Native TiGL bindings (tigl3/tixi3) are not importable and the "
+            "containerised fallback did not produce a mesh. Install TiGL "
+            "(https://github.com/DLR-SC/tigl), or start Docker Desktop so the "
+            "tigl-mcp:dev image can run. TiGL meshes wings and fuselages by "
+            "UID; other component types are not supported.",
+        )
+    return mesh_bytes
+
+
 def _export_mesh_bytes(
     tigl_handle: TiglConfiguration,
     component: ComponentDefinition,
     mesh_format: MeshFormat,
+    cpacs_xml: str = "",
 ) -> bytes:
     """Export mesh content for the requested format."""
     if mesh_format == "su2":
-        return _export_su2_via_tigl(tigl_handle, component)
+        return _export_su2_via_tigl(tigl_handle, component, cpacs_xml)
 
     if mesh_format == "stl" and _has_real_tigl_exports(tigl_handle):
         return _export_real_stl_bytes(tigl_handle, component)
 
-    return _synthetic_mesh_bytes(mesh_format, component)
+    return _export_mesh_via_docker_or_fail(component, mesh_format, cpacs_xml)
 
 
 def _looks_like_handle(mesh_bytes: bytes) -> bool:
@@ -332,6 +333,7 @@ def export_component_mesh_tool(session_manager: SessionManager) -> ToolDefinitio
                 tigl_handle=tigl_handle,
                 component=component,
                 mesh_format=params.format,
+                cpacs_xml=session_manager.get_cpacs_xml(params.session_id) or "",
             )
             validated_mesh = _validate_mesh_bytes(mesh_bytes, params.format, component)
             mesh_base64 = base64.b64encode(validated_mesh).decode("utf-8")
@@ -690,8 +692,26 @@ def export_configuration_cad_tool(session_manager: SessionManager) -> ToolDefini
                 )
                 source = "tigl"
             else:
-                cad_bytes = f"cad:{params.format}:{cpacs_xml}".encode()
-                source = "stub"
+                # No native bindings. Fall through to the same containerised
+                # TiGL the adapter uses, so this tool and the deterministic
+                # pipeline produce identical geometry from identical inputs.
+                # Previously this branch returned f"cad:{format}:{cpacs_xml}",
+                # which was the raw CPACS text labelled as CAD.
+                from tigl_mcp.cpacs_adapter import _try_export_cad_via_docker
+
+                docker_bytes = _try_export_cad_via_docker(cpacs_xml, params.format)
+                if docker_bytes is None:
+                    raise_mcp_error(
+                        "CadExportUnavailable",
+                        f"Cannot export {params.format.upper()} CAD: no TiGL "
+                        "kernel is available.",
+                        "Native TiGL bindings (tigl3/tixi3) are not importable "
+                        "and the containerised fallback did not produce a file. "
+                        "Install TiGL (https://github.com/DLR-SC/tigl), or start "
+                        "Docker Desktop so the tigl-mcp:dev image can run.",
+                    )
+                cad_bytes = docker_bytes
+                source = "docker_tigl"
 
             cad_base64 = base64.b64encode(cad_bytes).decode("utf-8")
             return {

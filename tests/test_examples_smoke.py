@@ -52,10 +52,27 @@ def test_session_lifecycle_example_runs() -> None:
 
 @pytest.mark.examples_full
 def test_export_snapshot_example_runs() -> None:
-    """The export example returns stable stub payload metadata."""
+    """The export example reports parsed facts and honest export outcomes."""
     completed = _run_example("examples/cpacs/export_snapshot.py")
     assert completed.returncode == 0, completed.stderr
 
     payload = json.loads(completed.stdout)
-    assert payload["mesh_prefix"] == "solid W1"
-    assert payload["cad_prefix"] == ["cad", "step"]
+
+    # Parsed straight from the file, so always present and exact.
+    assert payload["wing_count"] == 1
+    assert payload["fuselage_count"] == 1
+    assert payload["wing_sections"] == 2
+    assert payload["wing_segments"] == 1
+
+    # Never estimated: absent unless a real kernel supplied one.
+    assert payload["bounding_box"] is None
+
+    # Exports depend on whether a TiGL kernel is reachable on this host, so
+    # accept either outcome, but never a fabricated payload.
+    for key in ("mesh", "cad"):
+        outcome = payload[key]
+        assert outcome["status"] in {"exported", "unavailable"}
+        if outcome["status"] == "exported":
+            assert outcome["bytes"] > 0
+        else:
+            assert outcome["error_type"].endswith("Unavailable")

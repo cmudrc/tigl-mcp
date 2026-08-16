@@ -65,13 +65,27 @@ def read_from_cpacs(cpacs_xml: str) -> dict[str, Any]:
     }
 
 
-def _try_export_step_via_docker(
+#: Per-format details for the containerised export: the TiGL method to call,
+#: the output file name, and the magic bytes a valid file starts with.
+_DOCKER_CAD_FORMATS: dict[str, tuple[str, str, bytes]] = {
+    "step": ("exportFusedSTEP", "output.step", b"ISO-10303-21"),
+    "iges": ("exportIGES", "output.igs", b""),
+}
+
+
+def _run_tigl_export_in_docker(
     cpacs_xml: str,
+    tigl_call: str,
+    out_name: str,
+    magic: bytes,
+    label: str,
     docker_image: str = "tigl-mcp:dev",
 ) -> bytes | None:
-    """Attempt STEP export by calling the TiGL MCP inside Docker.
+    """Run one TiGL export call inside the container and return the file bytes.
 
-    Returns the STEP file bytes on success, None on failure.
+    ``tigl_call`` is a Python expression invoked on an opened ``tigl`` handle,
+    e.g. ``exportFusedSTEP('/work/output.step')``. Returns None on any failure,
+    so callers can decide whether to fall back or raise.
     """
     try:
         proc = subprocess.run(
@@ -95,7 +109,7 @@ def _try_export_step_via_docker(
         LOGGER.debug("Docker image %s not found", docker_image)
         return None
 
-    with tempfile.TemporaryDirectory(prefix="tigl_step_") as tmpdir:
+    with tempfile.TemporaryDirectory(prefix="tigl_export_") as tmpdir:
         cpacs_path = Path(tmpdir) / "input.xml"
         cpacs_path.write_text(cpacs_xml, encoding="utf-8")
 
@@ -110,7 +124,7 @@ def _try_export_step_via_docker(
             "tixi.open('/work/input.xml'); "
             "tigl = tigl3wrapper.Tigl3(); "
             "tigl.open(tixi, ''); "
-            "tigl.exportFusedSTEP('/work/output.step'); "
+            f"tigl.{tigl_call}; "
         )
 
         try:
@@ -134,23 +148,99 @@ def _try_export_step_via_docker(
                 text=True,
                 timeout=120,
             )
-            step_path = Path(tmpdir) / "output.step"
-            if result.returncode == 0 and step_path.exists():
-                step_bytes = step_path.read_bytes()
-                if step_bytes.lstrip().startswith(b"ISO-10303-21"):
+            out_path = Path(tmpdir) / out_name
+            if result.returncode == 0 and out_path.exists():
+                out_bytes = out_path.read_bytes()
+                if out_bytes.lstrip().startswith(magic):
                     LOGGER.info(
-                        "STEP export via Docker succeeded (%d bytes)", len(step_bytes)
+                        "%s export via Docker succeeded (%d bytes)",
+                        label,
+                        len(out_bytes),
                     )
-                    return step_bytes
-                LOGGER.warning("Docker produced non-STEP output")
+                    return out_bytes
+                LOGGER.warning("Docker produced unexpected %s output", label)
             else:
-                LOGGER.warning("Docker STEP export failed: %s", result.stderr[:500])
+                LOGGER.warning(
+                    "Docker %s export failed: %s", label, result.stderr[:500]
+                )
         except subprocess.TimeoutExpired:
-            LOGGER.warning("Docker STEP export timed out")
+            LOGGER.warning("Docker %s export timed out", label)
         except Exception as exc:
-            LOGGER.warning("Docker STEP export error: %s", exc)
+            LOGGER.warning("Docker %s export error: %s", label, exc)
 
     return None
+
+
+def _try_export_cad_via_docker(
+    cpacs_xml: str,
+    cad_format: str = "step",
+    docker_image: str = "tigl-mcp:dev",
+) -> bytes | None:
+    """Export whole-configuration CAD by driving real TiGL inside Docker."""
+    fmt = _DOCKER_CAD_FORMATS.get(cad_format)
+    if fmt is None:
+        LOGGER.debug("Unsupported Docker CAD format %s", cad_format)
+        return None
+    method, out_name, magic = fmt
+    return _run_tigl_export_in_docker(
+        cpacs_xml,
+        f"{method}('/work/{out_name}')",
+        out_name,
+        magic,
+        cad_format.upper(),
+        docker_image,
+    )
+
+
+def _try_export_step_via_docker(
+    cpacs_xml: str,
+    docker_image: str = "tigl-mcp:dev",
+) -> bytes | None:
+    """Back-compatible STEP-only wrapper around :func:`_try_export_cad_via_docker`."""
+    return _try_export_cad_via_docker(cpacs_xml, "step", docker_image)
+
+
+#: TiGL's per-component mesh exporters, keyed by (component type, format).
+#: Meshing is per component and by UID, so a caller gets the geometry of the
+#: part it named rather than the whole aircraft.
+_DOCKER_MESH_METHODS: dict[tuple[str, str], tuple[str, str, bytes]] = {
+    ("wing", "stl"): ("exportMeshedWingSTLByUID", "mesh.stl", b"solid"),
+    ("fuselage", "stl"): ("exportMeshedFuselageSTLByUID", "mesh.stl", b"solid"),
+    ("wing", "vtk"): ("exportMeshedWingVTKByUID", "mesh.vtk", b"# vtk"),
+    ("fuselage", "vtk"): ("exportMeshedFuselageVTKByUID", "mesh.vtk", b"# vtk"),
+}
+
+
+def _try_export_mesh_via_docker(
+    cpacs_xml: str,
+    component_uid: str,
+    component_type: str,
+    mesh_format: str = "stl",
+    deflection: float = 0.01,
+    docker_image: str = "tigl-mcp:dev",
+) -> bytes | None:
+    """Export a real surface mesh for one component via TiGL inside Docker."""
+    key = (component_type.lower(), mesh_format.lower())
+    entry = _DOCKER_MESH_METHODS.get(key)
+    if entry is None:
+        LOGGER.debug("No TiGL mesh exporter for %s/%s", component_type, mesh_format)
+        return None
+    method, out_name, magic = entry
+
+    # UIDs come from the CPACS file, but quote defensively: this string is
+    # interpolated into a Python expression run inside the container.
+    if "'" in component_uid or "\\" in component_uid:
+        LOGGER.warning("Refusing unsafe component UID %r", component_uid)
+        return None
+
+    return _run_tigl_export_in_docker(
+        cpacs_xml,
+        f"{method}('{component_uid}', '/work/{out_name}', {float(deflection)})",
+        out_name,
+        magic,
+        f"{component_type} {mesh_format.upper()}",
+        docker_image,
+    )
 
 
 def export_step(

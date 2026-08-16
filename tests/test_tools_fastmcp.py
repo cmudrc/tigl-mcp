@@ -8,6 +8,7 @@ import pytest
 from fastmcp.client import Client
 from fastmcp.exceptions import ToolError
 
+from tigl_mcp import cpacs_adapter
 from tigl_mcp.fastmcp_adapter import build_fastmcp_app
 from tigl_mcp.session_manager import SessionManager
 
@@ -57,9 +58,29 @@ async def test_fastmcp_propagates_structured_errors() -> None:
 
 @pytest.mark.anyio()
 async def test_fastmcp_server_exposes_export_endpoints(
-    sample_cpacs_xml: str,
+    sample_cpacs_xml: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """FastMCP clients see real counts, and errors where a kernel is needed."""
+    real_stl = (
+        b"solid W1\n"
+        b"  facet normal 0 0 1\n"
+        b"    outer loop\n"
+        b"      vertex 12.744 0.0 0.0\n"
+        b"      vertex 22.137 0.0 0.0\n"
+        b"      vertex 17.0 16.963 0.0\n"
+        b"    endloop\n"
+        b"  endfacet\n"
+        b"endsolid W1\n"
+    )
+    # Minimal IGES-shaped payload: 72 columns of content then the S-section
+    # sequence marker, which is what the format's first record looks like.
+    real_iges = b" " * 72 + b"S      1\n"
+    monkeypatch.setattr(
+        cpacs_adapter, "_try_export_mesh_via_docker", lambda *a, **k: real_stl
+    )
+    monkeypatch.setattr(
+        cpacs_adapter, "_try_export_cad_via_docker", lambda *a, **k: real_iges
+    )
     app, _ = build_fastmcp_app(SessionManager())
 
     async with Client(app) as client:
@@ -97,6 +118,9 @@ async def test_fastmcp_server_exposes_export_endpoints(
             with pytest.raises(ToolError, match="without a real geometry kernel"):
                 await client.call_tool(tool_name, payload)
 
+        # Exports route to real TiGL. The kernel is stubbed out here so the
+        # test is deterministic on hosts with and without Docker; what is
+        # asserted is that the tool returns the kernel's bytes unaltered.
         mesh_export = await client.call_tool(
             "export_component_mesh",
             {
@@ -105,15 +129,12 @@ async def test_fastmcp_server_exposes_export_endpoints(
                 "format": "stl",
             },
         )
-        mesh_bytes = base64.b64decode(mesh_export.data["mesh_base64"])
-        assert mesh_bytes.startswith(b"solid W1")
+        assert base64.b64decode(mesh_export.data["mesh_base64"]) == real_stl
 
         cad_export = await client.call_tool(
             "export_configuration_cad", {"session_id": session_id, "format": "iges"}
         )
-        cad_text = base64.b64decode(cad_export.data["cad_base64"]).decode()
         cpacs_text = base64.b64decode(cad_export.data["cpacs_xml_base64"]).decode()
-        assert cad_text.startswith("cad:iges:")
-        assert cad_export.data["source"] == "stub"
-        assert "<cpacs>" in cad_text
+        assert base64.b64decode(cad_export.data["cad_base64"]) == real_iges
+        assert cad_export.data["source"] == "docker_tigl"
         assert "<cpacs>" in cpacs_text
