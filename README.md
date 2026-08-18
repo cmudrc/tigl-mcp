@@ -66,11 +66,34 @@ make docs
 
 ## Current Capability Boundaries
 
-- The default tests and examples target the deterministic stand-ins in
-  `tigl_mcp.cpacs_stubs`.
-- Tool names, schemas, and JSON payload shapes are stable.
-- Geometry values are intentionally simplified; they reflect the current stub
-  contract rather than full native TiGL fidelity.
+This is the authoritative statement of which paths run real TiGL and which do
+not. Nothing here estimates geometry.
+
+**Real TiGL, always.** CAD export (`export_configuration_cad`, STEP and IGES)
+and mesh export (`export_component_mesh`) drive the real TiGL library, either
+through native `tigl3`/`tixi3` bindings or through the `tigl-mcp:dev` Docker
+image. The route actually taken is recorded in CPACS as `stepExportSource`, so
+exported geometry is traceable. On the D150 this produces a 3.2 MB STEP file
+and per-component surface meshes of a few thousand triangles.
+
+**Read from the CPACS file, so always available.** Component UIDs, names,
+symmetry flags, wing/fuselage/rotor/engine counts, per-component section and
+segment counts, and the reference area and length. These are values the file
+states directly.
+
+**Requires a real kernel, and reports `GeometryUnavailable` without one.**
+Bounding boxes, wing span and area, aspect ratio, MAC, fuselage length, surface
+sampling, and plane/component intersection. Deriving any of these means
+evaluating profile geometry through the CPACS positioning and transformation
+chain, which is what TiGL is for. When no kernel is reachable these tools raise
+a structured error naming the missing dependency. They do not return an
+estimate.
+
+> Until 2026-08-15 several of these returned values derived from a component's
+> index in an array — a wing's bounding box was literally its position in the
+> list. Those were removed, along with a synthetic single-triangle mesh and a
+> CAD "export" that returned the CPACS text relabelled. If you are reading
+> older notes or output that mention stub geometry, they predate this.
 
 ## Shared-CPACS Integration
 
@@ -80,8 +103,10 @@ bridges TiGL to the shared-CPACS aircraft analysis pipeline.
 ### What it does
 
 The adapter reads CPACS geometry (wings, fuselages, profiles) and writes
-analysis results — component counts, bounding boxes, and STEP export metadata
-— into `//analysisResults/tigl`.
+analysis results — component counts, per-component section and segment counts,
+and STEP export metadata — into `//analysisResults/tigl`. A `boundingBox`
+element is written only when a real geometry kernel supplied one, and is
+omitted otherwise.
 
 | Direction | XPath |
 |-----------|-------|
@@ -107,8 +132,15 @@ full pipeline documentation, versioning details, and installation instructions.
 |-----|-----------|
 | SU2 (CFD aerodynamics) | [cmudrc/su2-mcp](https://github.com/cmudrc/su2-mcp) |
 | pyCycle (engine cycle) | [cmudrc/pycycle-mcp](https://github.com/cmudrc/pycycle-mcp) |
-| Mission (trajectory/fuel) | [cmudrc/mission-mcp](https://github.com/cmudrc/mission-mcp) |
+| Mission, segment/Breguet | [cmudrc/nseg-mcp](https://github.com/cmudrc/nseg-mcp) |
+| Mission, trajectory-level | [cmudrc/aviary-cpacs-mcp](https://github.com/cmudrc/aviary-cpacs-mcp) |
 
 ## Contributing
 
 Contribution guidelines live in [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
+## Maintainers
+
+Mayank Dixit ([@Kugel-Blitz-13](https://github.com/Kugel-Blitz-13)), Carnegie
+Mellon University — mayankd@cmu.edu
+Christopher McComb, Carnegie Mellon University — Design Research Collective
