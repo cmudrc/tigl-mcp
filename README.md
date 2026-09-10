@@ -4,10 +4,11 @@
 [![Docs](https://github.com/cmudrc/tigl-mcp/actions/workflows/docs-pages.yml/badge.svg)](https://github.com/cmudrc/tigl-mcp/actions/workflows/docs-pages.yml)
 [![Examples](https://github.com/cmudrc/tigl-mcp/actions/workflows/examples.yml/badge.svg)](https://github.com/cmudrc/tigl-mcp/actions/workflows/examples.yml)
 
-`tigl-mcp` is a lightweight Model Context Protocol server for CPACS-oriented
-TiGL workflows. The current implementation focuses on deterministic,
-JSON-friendly tooling backed by stubbed CPACS/TiGL behavior so local
-development, tests, and docs stay stable without native geometry runtimes.
+`tigl-mcp` is a Model Context Protocol server for CPACS-oriented TiGL
+workflows. CAD and mesh export drive the real TiGL library (natively, or in a
+container). Geometry queries that need a TiGL kernel raise a structured
+`GeometryUnavailable` error when none is present; nothing returns synthetic
+values.
 
 ## Overview
 
@@ -17,7 +18,7 @@ The project currently provides:
 - A curated set of CPACS lifecycle, inspection, export, sampling, and parameter
   tools
 - Pydantic-backed tool validation with structured MCP error payloads
-- Deterministic CPACS/TiGL stand-ins for stable local development and CI
+- Structured `GeometryUnavailable` errors when no TiGL kernel is present, never synthetic geometry
 
 ## Quickstart
 
@@ -45,8 +46,8 @@ PYTHONPATH=src python3 examples/server/http_launch_config.py
 
 ## Examples
 
-The examples are deterministic and aligned with the current stub-backed
-implementation.
+The examples are deterministic and do not need a TiGL kernel: geometry tools
+raise a structured error rather than returning made-up values.
 
 - Examples index: [`examples/README.md`](examples/README.md)
 - Tool discovery: [`examples/client/tool_discovery.py`](examples/client/tool_discovery.py)
@@ -116,8 +117,8 @@ omitted otherwise.
 ### Running as part of the pipeline
 
 ```bash
-# As part of the full 4-MCP pipeline (with SU2, pyCycle, Mission)
-python pipeline/shared_cpacs_orchestrator.py D150_v30.xml --mcps tigl su2 pycycle mission
+# As part of the full five-MCP pipeline (with SU2, pyCycle, NSEG)
+python pipeline/shared_cpacs_orchestrator.py D150_v30.xml --mcps tigl su2 pycycle nseg
 
 # TiGL only
 python pipeline/shared_cpacs_orchestrator.py D150_v30.xml --mcps tigl

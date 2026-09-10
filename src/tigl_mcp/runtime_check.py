@@ -29,7 +29,8 @@ To install, choose one of the following options:
   4. Pre-built binaries from DLR:
      https://github.com/DLR-SC/tigl/releases
 
-The server will still start in stub mode (synthetic geometry) without
+The server will still start in a degraded mode: geometry tools return structured
+errors instead of values without
 these bindings, but real STEP/STL export requires the native runtime.
 """
 
@@ -130,7 +131,10 @@ def print_runtime_report() -> None:
     if report.get("all_ok"):
         print("  All dependencies found. Full TiGL geometry export is available.")
     else:
-        print("  Some dependencies are missing. The server will run in stub mode.")
+        print(
+            "  Some dependencies are missing. Geometry tools will return structured "
+            "errors until they are installed."
+        )
         print()
         print(INSTALL_GUIDE)
 
