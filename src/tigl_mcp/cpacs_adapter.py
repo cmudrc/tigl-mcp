@@ -8,10 +8,12 @@ libraries aren't available), and writes analysis results back into
 
 from __future__ import annotations
 
+import importlib.metadata
 import json
 import logging
 import subprocess
 import tempfile
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from xml.etree import ElementTree as ET
@@ -615,7 +617,82 @@ def write_to_cpacs(cpacs_xml: str, results: dict[str, Any]) -> str:
             for axis in ("xmin", "xmax", "ymin", "ymax", "zmin", "zmax"):
                 ET.SubElement(bb_el, axis).text = f"{bb.get(axis, 0.0):.6f}"
 
+    _append_header_update(
+        root,
+        "tigl-mcp wrote analysisResults/tigl (component inventory, TiGL geometry "
+        "areas when computed, STEP export metadata)",
+        _creator_label(),
+    )
+
     return ET.tostring(root, encoding="unicode", xml_declaration=True)
+
+
+def _creator_label() -> str:
+    """Return ``"tigl-mcp <version>"`` for the header provenance entry.
+
+    The version is read from the installed distribution metadata. When the
+    package is not installed as a distribution it is reported as ``unknown``
+    rather than guessed.
+    """
+    try:
+        version = importlib.metadata.version("tigl-mcp")
+    except importlib.metadata.PackageNotFoundError:
+        version = "unknown"
+    return f"tigl-mcp {version}"
+
+
+def _append_header_update(
+    root: ET.Element, modification: str, creator: str
+) -> ET.Element:
+    """Record one write in the CPACS ``header/updates`` provenance list.
+
+    CPACS keeps a running log of changes to a document in ``header/updates``.
+    Appending an entry for every write lets a reader of the shared file see
+    which tool wrote which section and when, without opening the run logs.
+
+    ``header`` is created as the first child of ``cpacs`` when it is missing.
+    ``updates`` is created when it is missing and placed directly after
+    ``cpacsVersion``, else directly after ``version``, else at the end of the
+    header, so the CPACS 3.x element order stays valid. Existing header
+    children are never removed or reordered.
+
+    The new ``update`` carries, in schema order: ``modification`` (one
+    sentence saying what was written), ``creator`` (package name and
+    version), ``timestamp`` (UTC, ISO 8601, seconds precision), ``version``
+    (a running count, 1 + the number of existing entries) and
+    ``cpacsVersion`` (copied from ``header/cpacsVersion``, else from
+    ``header/version``, else left empty).
+    """
+    header = root.find("header")
+    if header is None:
+        header = ET.Element("header")
+        root.insert(0, header)
+
+    updates = header.find("updates")
+    if updates is None:
+        updates = ET.Element("updates")
+        anchor = header.find("cpacsVersion")
+        if anchor is None:
+            anchor = header.find("version")
+        if anchor is None:
+            header.append(updates)
+        else:
+            header.insert(list(header).index(anchor) + 1, updates)
+
+    running_version = len(updates.findall("update")) + 1
+    cpacs_version = (
+        header.findtext("cpacsVersion") or header.findtext("version") or ""
+    ).strip()
+
+    update = ET.SubElement(updates, "update")
+    ET.SubElement(update, "modification").text = modification
+    ET.SubElement(update, "creator").text = creator
+    ET.SubElement(update, "timestamp").text = datetime.now(UTC).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+    ET.SubElement(update, "version").text = str(running_version)
+    ET.SubElement(update, "cpacsVersion").text = cpacs_version
+    return update
 
 
 def _merge_docker_geometry(

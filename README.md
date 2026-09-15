@@ -113,6 +113,7 @@ omitted otherwise.
 |-----------|-------|
 | **Reads** | `.//vehicles/aircraft/model`, `.//vehicles/profiles` |
 | **Writes** | `.//vehicles/aircraft/model/analysisResults/tigl` |
+| **Records** | one `header/updates/update` entry per write: what was written, `tigl-mcp <version>`, UTC timestamp, running version, cpacsVersion |
 
 ### Running as part of the pipeline
 
