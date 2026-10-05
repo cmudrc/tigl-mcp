@@ -93,9 +93,20 @@ def set_high_level_parameters_tool(session_manager: SessionManager) -> ToolDefin
                     raise
                 except Exception as exc:  # pragma: no cover - defensive path
                     warnings.append(f"Skipped '{key}': {exc}")
+            # Found 2026-10-05: these values live only in the session's
+            # parameter table. They are not written to the CPACS geometry, so
+            # CAD export, meshing and CFD do not change. Returning them as a
+            # plain success let a caller believe the geometry had changed.
             return {
                 "component_uid": component.uid,
                 "new_parameters": component.parameters,
+                "applies_to_geometry": False,
+                "note": (
+                    "Stored in this session's parameter table only. The CPACS "
+                    "geometry is NOT modified, so export_configuration_cad and "
+                    "any CFD run use the original shape. To change the "
+                    "aircraft, edit the CPACS file and reopen it."
+                ),
                 "warnings": warnings,
             }
         except MCPError as error:
@@ -107,7 +118,11 @@ def set_high_level_parameters_tool(session_manager: SessionManager) -> ToolDefin
 
     return ToolDefinition(
         name="set_high_level_parameters",
-        description="Update high-level design parameters and return the new values.",
+        description=(
+            "Record high-level design parameter values in this session's "
+            "parameter table. Does NOT modify the CPACS geometry: CAD export "
+            "and CFD still use the original shape (see applies_to_geometry)."
+        ),
         parameters_model=SetParametersParams,
         handler=handler,
         output_schema={},

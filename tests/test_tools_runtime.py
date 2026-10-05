@@ -82,6 +82,10 @@ def test_parameter_updates_support_relative_changes(sample_cpacs_xml: str) -> No
     )
     assert update_result["new_parameters"]["span"] == pytest.approx(33.0)
     assert update_result["new_parameters"]["area"] == 85.0
+    # The values are a session record only; the response must say the
+    # CPACS geometry (and so CAD export and CFD) is unchanged.
+    assert update_result["applies_to_geometry"] is False
+    assert "NOT modified" in update_result["note"]
 
 
 def test_geometry_tools_fail_loudly_without_a_kernel(
