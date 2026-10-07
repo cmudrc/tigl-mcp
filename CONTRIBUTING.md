@@ -51,4 +51,4 @@ pre-commit run --all-files
 - The default test suite targets the deterministic CPACS/TiGL stubs in
   `tigl_mcp.cpacs_stubs`.
 - Real TiGL integration tests should stay optional and use the
-  `integration_real` marker once those fixtures exist.
+  `integration_real` marker.
