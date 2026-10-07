@@ -300,8 +300,11 @@ json.dump(report, open("/work/output.json", "w"), indent=1)
 
 
 #: Runs inside the container. Asks real TiGL for the per-component surface and
-#: wetted areas, spans and fuselage volumes. TiGL reports one side of a
-#: symmetric wing; the caller doubles it and says so.
+#: wetted areas, spans, fuselage volumes and projected reference areas, and
+#: OpenCASCADE for each loft's bounding box and the shortest distance from each
+#: wing (own and mirrored loft) to each fuselage. TiGL reports one side of a
+#: symmetric wing; the caller doubles areas and says so. The OpenCASCADE part is
+#: kept separate so the areas still come back if it fails.
 _GEOMETRY_QUERY_SCRIPT = r"""
 import json
 out = {"wings": [], "fuselages": [], "errors": []}
@@ -316,22 +319,70 @@ try:
     tixi = tixi3wrapper.Tixi3(); tixi.open("/work/input.xml")
     tigl = tigl3wrapper.Tigl3(); tigl.open(tixi, "")
     out["tigl_version"] = attempt("getVersion", tigl.getVersion)
+    cfg = None
+    try:
+        from tigl3 import configuration as tconf
+        from OCC.Core.Bnd import Bnd_Box
+        from OCC.Core.BRepBndLib import brepbndlib_Add
+        from OCC.Core.BRepExtrema import BRepExtrema_DistShapeShape
+        cfg = tconf.CCPACSConfigurationManager_get_instance().get_configuration(tigl._handle.value)
+        def bbox(shape):
+            bb = Bnd_Box(); brepbndlib_Add(shape, bb); x0, y0, z0, x1, y1, z1 = bb.Get()
+            return {"xmin": x0, "xmax": x1, "ymin": y0, "ymax": y1, "zmin": z0, "zmax": z1}
+        def distance(a, b):
+            d = BRepExtrema_DistShapeShape(a, b); d.Perform()
+            return d.Value() if d.IsDone() else None
+    except Exception as exc:
+        out["errors"].append("opencascade: " + type(exc).__name__ + ": " + str(exc))
+    try:
+        xy_plane = tigl3wrapper.TiglSymmetryAxis.TIGL_X_Y_PLANE
+    except Exception:
+        xy_plane = 1
+    fus_shapes = []
+    for i in range(1, (attempt("getFuselageCount", tigl.getFuselageCount) or 0) + 1):
+        uid = attempt("fuselageGetUID", lambda: tigl.fuselageGetUID(i))
+        rec = {
+            "uid": uid,
+            "surface_area_m2": attempt("fuselageGetSurfaceArea", lambda: tigl.fuselageGetSurfaceArea(i)),
+            "volume_m3": attempt("fuselageGetVolume", lambda: tigl.fuselageGetVolume(i)),
+        }
+        if cfg is not None:
+            sh = attempt("fuselage loft", lambda: cfg.get_fuselage(i).get_loft().shape())
+            if sh is not None:
+                fus_shapes.append((uid, sh))
+                rec["bounding_box"] = attempt("fuselage bounding box", lambda: bbox(sh))
+        out["fuselages"].append(rec)
     for i in range(1, (attempt("getWingCount", tigl.getWingCount) or 0) + 1):
         uid = attempt("wingGetUID", lambda: tigl.wingGetUID(i))
-        out["wings"].append({
+        rec = {
             "uid": uid,
             "surface_area_m2": attempt("wingGetSurfaceArea", lambda: tigl.wingGetSurfaceArea(i)),
             "wetted_area_m2": attempt("wingGetWettedArea", lambda: tigl.wingGetWettedArea(uid)),
             "span_m": attempt("wingGetSpan", lambda: tigl.wingGetSpan(uid)),
             "symmetry": attempt("wingGetSymmetry", lambda: int(tigl.wingGetSymmetry(i))),
-        })
-    for i in range(1, (attempt("getFuselageCount", tigl.getFuselageCount) or 0) + 1):
-        uid = attempt("fuselageGetUID", lambda: tigl.fuselageGetUID(i))
-        out["fuselages"].append({
-            "uid": uid,
-            "surface_area_m2": attempt("fuselageGetSurfaceArea", lambda: tigl.fuselageGetSurfaceArea(i)),
-            "volume_m3": attempt("fuselageGetVolume", lambda: tigl.fuselageGetVolume(i)),
-        })
+            "reference_area_xy_m2": attempt("wingGetReferenceArea", lambda: tigl.wingGetReferenceArea(i, xy_plane)),
+        }
+        if cfg is not None:
+            sh = attempt("wing loft", lambda: cfg.get_wing(i).get_loft().shape())
+            if sh is not None:
+                try:
+                    m = cfg.get_wing(i).get_mirrored_loft()
+                    msh = m.shape() if m is not None else None
+                except Exception:
+                    msh = None
+                rec["bounding_box"] = attempt("wing bounding box", lambda: bbox(sh))
+                if msh is not None:
+                    rec["bounding_box_mirrored"] = attempt("mirrored wing bounding box", lambda: bbox(msh))
+                dist = {}
+                for fuid, fsh in fus_shapes:
+                    v = attempt("wing-fuselage distance", lambda: distance(sh, fsh))
+                    if msh is not None:
+                        v2 = attempt("mirrored wing-fuselage distance", lambda: distance(msh, fsh))
+                        if v2 is not None:
+                            v = v2 if v is None else min(v, v2)
+                    dist[fuid] = v
+                rec["min_distance_to_fuselage_m"] = dist
+        out["wings"].append(rec)
 except Exception as exc:
     out["errors"].append(type(exc).__name__ + ": " + str(exc))
 json.dump(out, open("/work/geometry.json", "w"), indent=1)
@@ -389,9 +440,10 @@ def _query_geometry_via_docker(
     if not outputs:
         return None
     try:
-        return json.loads(outputs["geometry.json"].decode("utf-8"))
+        data: dict[str, Any] = json.loads(outputs["geometry.json"].decode("utf-8"))
     except (KeyError, ValueError):
         return None
+    return data
 
 
 def _try_export_cad_via_docker(
@@ -617,10 +669,24 @@ def write_to_cpacs(cpacs_xml: str, results: dict[str, Any]) -> str:
             for axis in ("xmin", "xmax", "ymin", "ymax", "zmin", "zmax"):
                 ET.SubElement(bb_el, axis).text = f"{bb.get(axis, 0.0):.6f}"
 
+    check = results.get("geometry_check")
+    if isinstance(check, dict):
+        gc_el = ET.SubElement(tigl_el, "geometryChecks")
+        gc_el.set("checked", str(bool(check.get("checked"))).lower())
+        if not check.get("checked"):
+            ET.SubElement(gc_el, "reason").text = str(check.get("reason", ""))
+        for name, value in (check.get("tolerances") or {}).items():
+            ET.SubElement(gc_el, "tolerance", name=name).text = str(value)
+        for f in check.get("findings") or []:
+            f_el = ET.SubElement(gc_el, "finding")
+            for key in ("type", "severity", "component", "message"):
+                ET.SubElement(f_el, key).text = str(f.get(key, ""))
+
     _append_header_update(
         root,
         "tigl-mcp wrote analysisResults/tigl (component inventory, TiGL geometry "
-        "areas when computed, STEP export metadata)",
+        "areas and bounding boxes when computed, geometry checks, STEP export "
+        "metadata)",
         _creator_label(),
     )
 
@@ -718,6 +784,20 @@ def _merge_docker_geometry(
                 comp[key] = float(w[key]) * factor
         if w.get("span_m") is not None:
             comp["span_m"] = float(w["span_m"])
+        if w.get("symmetry") is not None:
+            comp["tigl_symmetry"] = int(w["symmetry"])
+        if w.get("reference_area_xy_m2") is not None:
+            # Projected planform area as TiGL computes it: one side of a
+            # symmetric wing, the whole wing otherwise.
+            comp["tigl_reference_area_m2"] = float(w["reference_area_xy_m2"])
+        box = _union_box(w.get("bounding_box"), w.get("bounding_box_mirrored"))
+        if box is not None:
+            comp["bounding_box"] = box
+        if isinstance(w.get("min_distance_to_fuselage_m"), dict):
+            comp["min_distance_to_fuselage_m"] = {
+                k: (float(v) if v is not None else None)
+                for k, v in w["min_distance_to_fuselage_m"].items()
+            }
         comp["area_note"] = (
             "TiGL wingGetSurfaceArea / wingGetWettedArea; symmetric wing, one side "
             "reported by TiGL, both sides written"
@@ -732,6 +812,8 @@ def _merge_docker_geometry(
             comp["surface_area_m2"] = float(f["surface_area_m2"])
         if f.get("volume_m3") is not None:
             comp["volume_m3"] = float(f["volume_m3"])
+        if isinstance(f.get("bounding_box"), dict):
+            comp["bounding_box"] = {k: float(v) for k, v in f["bounding_box"].items()}
         comp["area_note"] = (
             "TiGL fuselageGetSurfaceArea (skin under wing and tail roots included)"
         )
@@ -742,6 +824,222 @@ def _merge_docker_geometry(
     )
     if geom.get("errors"):
         results["geometry_query_errors"] = geom["errors"]
+    results["geometry_check"] = check_geometry(results)
+
+
+def _union_box(a: object, b: object) -> dict[str, float] | None:
+    """Return the box around both lofts of a wing, or around the one that exists."""
+    boxes = [x for x in (a, b) if isinstance(x, dict)]
+    if not boxes:
+        return None
+    return {
+        "xmin": min(float(x["xmin"]) for x in boxes),
+        "xmax": max(float(x["xmax"]) for x in boxes),
+        "ymin": min(float(x["ymin"]) for x in boxes),
+        "ymax": max(float(x["ymax"]) for x in boxes),
+        "zmin": min(float(x["zmin"]) for x in boxes),
+        "zmax": max(float(x["zmax"]) for x in boxes),
+    }
+
+
+#: A wing counts as attached to a fuselage when the lofts are within this
+#: distance: 5 cm, or 1 percent of the fuselage length if that is larger.
+ATTACHMENT_TOLERANCE_M = 0.05
+ATTACHMENT_TOLERANCE_FRACTION = 0.01
+#: A wing that is not mirrored and whose loft lies entirely on one side of the
+#: centreline, beyond this distance, is a one-sided wing.
+CENTRELINE_TOLERANCE_M = 0.05
+#: The file's reference area must lie within this factor of the planform area
+#: of its largest wing. This is an impossibility bound, not an accuracy bound:
+#: a wrong-unit or wrong-aircraft value fails it, nothing plausible does.
+REF_AREA_RATIO_BAND = (0.25, 4.0)
+
+
+def check_geometry(results: dict[str, Any]) -> dict[str, Any]:
+    """Compare the geometry real TiGL produced with what the file describes.
+
+    Added 2026-10-07 after the Seeker test: on renders of an airliner with its
+    main wing on one side only, or floating 6 m above the fuselage, the
+    multimodal observer reported a normal aircraft at both 4 B and 27 B
+    parameters, and the numbers-only arm accepted a lift coefficient of 13.3
+    from a wrong reference area. These are properties of the geometry, so they
+    are checked here, from the lofts, before any CFD is meshed on them.
+
+    Every finding has ``severity`` "fault" and names the component, what was
+    measured and the tolerance. ``checked`` is false, with a reason, when the
+    kernel supplied nothing to check against.
+    """
+    comps = results.get("components", [])
+    wings = [c for c in comps if str(c.get("type", "")).lower() == "wing"]
+    fuselages = [c for c in comps if str(c.get("type", "")).lower() == "fuselage"]
+    have_boxes = any(c.get("bounding_box") for c in wings + fuselages)
+    have_ref = any(c.get("tigl_reference_area_m2") is not None for c in wings)
+    if not (have_boxes or have_ref):
+        return {
+            "checked": False,
+            "reason": "no geometry kernel supplied bounding boxes or planform areas",
+            "findings": [],
+        }
+
+    findings: list[dict[str, Any]] = []
+    checks_run: list[str] = []
+    fus_boxes = [f["bounding_box"] for f in fuselages if f.get("bounding_box")]
+    centreline_bodies = [b for b in fus_boxes if b["ymin"] < 0.0 < b["ymax"]]
+    fus_length = max((b["xmax"] - b["xmin"] for b in fus_boxes), default=None)
+    attach_tol = ATTACHMENT_TOLERANCE_M
+    if fus_length:
+        attach_tol = max(attach_tol, ATTACHMENT_TOLERANCE_FRACTION * fus_length)
+
+    for w in wings:
+        uid = w.get("uid")
+        box = w.get("bounding_box")
+        sym = w.get("tigl_symmetry")
+        if box is not None and centreline_bodies and sym is not None:
+            checks_run.append(f"one_sided:{uid}")
+            one_sided = sym == 0 and (
+                box["ymin"] >= -CENTRELINE_TOLERANCE_M
+                or box["ymax"] <= CENTRELINE_TOLERANCE_M
+            )
+            if one_sided:
+                side = (
+                    "right (+y)"
+                    if box["ymin"] >= -CENTRELINE_TOLERANCE_M
+                    else "left (-y)"
+                )
+                findings.append(
+                    {
+                        "type": "wing_one_side_only",
+                        "severity": "fault",
+                        "component": uid,
+                        "message": (
+                            f"Wing '{uid}' has no symmetry and its loft lies entirely on the "
+                            f"{side} side of the centreline (y from {box['ymin']:.3f} to "
+                            f"{box['ymax']:.3f} m) while a fuselage straddles y = 0. A one-sided "
+                            "lifting surface on a centreline body is not a flyable aircraft; "
+                            "set the wing's symmetry or model the other side."
+                        ),
+                        "measured": {
+                            "ymin_m": box["ymin"],
+                            "ymax_m": box["ymax"],
+                            "symmetry": sym,
+                        },
+                    }
+                )
+        dists = w.get("min_distance_to_fuselage_m")
+        if isinstance(dists, dict) and fuselages:
+            values = [v for v in dists.values() if v is not None]
+            if values:
+                checks_run.append(f"attachment:{uid}")
+                dmin = min(values)
+                if dmin > attach_tol:
+                    findings.append(
+                        {
+                            "type": "wing_detached",
+                            "severity": "fault",
+                            "component": uid,
+                            "message": (
+                                f"Wing '{uid}' does not touch any fuselage: the closest "
+                                f"approach of its loft to a fuselage is {dmin:.3f} m, "
+                                f"beyond the {attach_tol:.3f} m attachment tolerance."
+                            ),
+                            "measured": {
+                                "min_distance_m": dmin,
+                                "tolerance_m": attach_tol,
+                            },
+                        }
+                    )
+
+    ref_area = results.get("ref_area_m2")
+    areas = [
+        (w["tigl_reference_area_m2"], w)
+        for w in wings
+        if w.get("tigl_reference_area_m2")
+    ]
+    if ref_area is not None and areas:
+        checks_run.append("reference_area")
+        tigl_area, w = max(areas, key=lambda t: t[0])
+        both = (w.get("tigl_symmetry") or 0) != 0
+        expected = tigl_area * (2.0 if both else 1.0)
+        ratio = float(ref_area) / expected if expected > 0 else None
+        if ratio is not None and not (
+            REF_AREA_RATIO_BAND[0] <= ratio <= REF_AREA_RATIO_BAND[1]
+        ):
+            findings.append(
+                {
+                    "type": "reference_area_inconsistent",
+                    "severity": "fault",
+                    "component": w.get("uid"),
+                    "message": (
+                        f"The file states a reference area of {float(ref_area):.4g} m2, but "
+                        f"the planform of its largest wing '{w.get('uid')}' is "
+                        f"{expected:.4g} m2 ({'both sides' if both else 'one side, no symmetry'}); "
+                        f"ratio {ratio:.3g} is outside [{REF_AREA_RATIO_BAND[0]}, "
+                        f"{REF_AREA_RATIO_BAND[1]}]. SU2 divides every force by this area, so "
+                        "the coefficients would be wrong by that ratio while looking plausible."
+                    ),
+                    "measured": {
+                        "file_reference_area_m2": float(ref_area),
+                        "wing_planform_area_m2": expected,
+                        "ratio": ratio,
+                    },
+                }
+            )
+
+    included = results.get("fused_components")
+    if isinstance(included, list):
+        for c in wings + fuselages:
+            kind = str(c.get("type", "")).lower()
+            uid = c.get("uid")
+            checks_run.append(f"exported:{uid}")
+            tag = f"{kind} {uid}"
+            if not any(s == tag or s == tag + " mirrored" for s in included):
+                findings.append(
+                    {
+                        "type": "component_missing_from_export",
+                        "severity": "fault",
+                        "component": uid,
+                        "message": (
+                            f"{kind.capitalize()} '{uid}' is in the file but not in the fused "
+                            "body that was exported for meshing, so the CFD would run on a "
+                            "different aircraft from the one described."
+                        ),
+                        "measured": {"exported": included},
+                    }
+                )
+
+    return {
+        "checked": True,
+        "findings": findings,
+        "checks_run": checks_run,
+        "tolerances": {
+            "attachment_m": attach_tol,
+            "centreline_m": CENTRELINE_TOLERANCE_M,
+            "reference_area_ratio_band": list(REF_AREA_RATIO_BAND),
+        },
+    }
+
+
+def geometry_faults_from_cpacs(cpacs_xml: str) -> list[dict[str, Any]]:
+    """Return the fault findings the geometry stage wrote into the file, if any."""
+    try:
+        root = ET.fromstring(cpacs_xml)
+    except ET.ParseError:
+        return []
+    out = []
+    for f in root.findall(
+        ".//vehicles/aircraft/model/analysisResults/tigl/geometryChecks/finding"
+    ):
+        if (f.findtext("severity") or "") != "fault":
+            continue
+        out.append(
+            {
+                "type": f.findtext("type") or "",
+                "severity": "fault",
+                "component": f.findtext("component") or "",
+                "message": f.findtext("message") or "",
+            }
+        )
+    return out
 
 
 def run_adapter(
@@ -778,6 +1076,12 @@ def run_adapter(
             results["tigl_version"] = rep["tigl_version"]
 
     _merge_docker_geometry(cpacs_xml, results, docker_image)
+    if "geometry_check" not in results:
+        results["geometry_check"] = {
+            "checked": False,
+            "reason": "no geometry kernel reachable (native tigl3 or the tigl-mcp:dev Docker image)",
+            "findings": [],
+        }
 
     if step_bytes and output_dir:
         out = Path(output_dir)

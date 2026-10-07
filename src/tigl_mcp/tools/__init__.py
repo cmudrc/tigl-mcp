@@ -9,6 +9,7 @@ from tigl_mcp.tools.configuration import (
     get_configuration_summary_tool,
     list_geometric_components_tool,
 )
+from tigl_mcp.tools.checks import check_geometry_tool
 from tigl_mcp.tools.cpacs_io import close_cpacs_tool, open_cpacs_tool
 from tigl_mcp.tools.export import (
     export_component_mesh_tool,
@@ -37,6 +38,7 @@ def build_tools(session_manager: SessionManager) -> list[ToolDefinition]:
         open_cpacs_tool(session_manager),
         close_cpacs_tool(session_manager),
         get_configuration_summary_tool(session_manager),
+        check_geometry_tool(session_manager),
         list_geometric_components_tool(session_manager),
         get_component_metadata_tool(session_manager),
         get_wing_summary_tool(session_manager),

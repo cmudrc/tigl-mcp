@@ -18,6 +18,7 @@ def test_build_tools_registers_expected_stub_toolset() -> None:
         "open_cpacs",
         "close_cpacs",
         "get_configuration_summary",
+        "check_geometry",
         "list_geometric_components",
         "get_component_metadata",
         "get_wing_summary",
