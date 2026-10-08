@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+from pathlib import Path
 
 import pytest
 
@@ -41,7 +42,11 @@ def test_export_configuration_cad_includes_cpacs_contents(
         cpacs_adapter, "_try_export_cad_via_docker", lambda *a, **k: real_step
     )
 
-    result = export_tool.handler({"session_id": session_id, "format": "step"})
+    result = export_tool.handler(
+        {"session_id": session_id, "format": "step", "include_base64": True}
+    )
+    # The path is the hand-off; the content is returned only when asked for.
+    assert Path(result["cad_path"]).read_bytes() == real_step
 
     decoded_cpacs = base64.b64decode(result["cpacs_xml_base64"]).decode()
 

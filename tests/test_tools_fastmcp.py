@@ -132,7 +132,8 @@ async def test_fastmcp_server_exposes_export_endpoints(
         assert base64.b64decode(mesh_export.data["mesh_base64"]) == real_stl
 
         cad_export = await client.call_tool(
-            "export_configuration_cad", {"session_id": session_id, "format": "iges"}
+            "export_configuration_cad",
+            {"session_id": session_id, "format": "iges", "include_base64": True},
         )
         cpacs_text = base64.b64decode(cad_export.data["cpacs_xml_base64"]).decode()
         assert base64.b64decode(cad_export.data["cad_base64"]) == real_iges

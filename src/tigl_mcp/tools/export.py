@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import os
 import sys
 import tempfile
@@ -37,6 +38,12 @@ class ExportCadParams(ToolParameters):
     format: Literal["step", "iges"]
     # If set, export only this component as a single solid STEP.
     component_uid: str | None = None
+    # Where to write the file. Default: a fresh temporary directory. The
+    # returned cad_path is what the CFD server's mesher takes.
+    output_path: str | None = None
+    # The encoded file content as well. Off by default: a 400 KB string in a
+    # tool response is something a model-driven client copies, and truncates.
+    include_base64: bool = False
 
 
 def _count_stl_triangles(mesh_bytes: bytes) -> int | None:
@@ -714,13 +721,30 @@ def export_configuration_cad_tool(session_manager: SessionManager) -> ToolDefini
                 cad_bytes = docker_bytes
                 source = "docker_tigl"
 
-            cad_base64 = base64.b64encode(cad_bytes).decode("utf-8")
-            return {
+            # Write the file and return its path. Found 2026-10-08: a
+            # model-driven client (Kiro) copied 528 of 535,928 base64
+            # characters into the mesher; the servers share a machine, so a
+            # path is the hand-off.
+            if params.output_path:
+                cad_path = Path(params.output_path)
+                cad_path.parent.mkdir(parents=True, exist_ok=True)
+            else:
+                suffix = ".step" if params.format == "step" else ".igs"
+                cad_path = Path(tempfile.mkdtemp(prefix="tigl_cad_")) / (
+                    "aircraft" + suffix
+                )
+            cad_path.write_bytes(cad_bytes)
+            out: dict[str, object] = {
                 "format": params.format,
-                "cad_base64": cad_base64,
+                "cad_path": str(cad_path),
+                "cad_bytes": len(cad_bytes),
+                "cad_sha256": hashlib.sha256(cad_bytes).hexdigest(),
                 "source": source,
                 "cpacs_xml_base64": cpacs_xml_base64,
             }
+            if params.include_base64:
+                out["cad_base64"] = base64.b64encode(cad_bytes).decode("utf-8")
+            return out
         except MCPError as error:
             raise error
         except Exception as exc:  # pragma: no cover - defensive path
@@ -732,7 +756,9 @@ def export_configuration_cad_tool(session_manager: SessionManager) -> ToolDefini
         name="export_configuration_cad",
         description=(
             "Export the full configuration CAD (or a single component when "
-            "component_uid is set) and return it encoded."
+            "component_uid is set) to a file and return its path as cad_path. "
+            "Pass cad_path to su2_generate_mesh_from_step as step_path. Set "
+            "include_base64 only if the file content itself is needed."
         ),
         parameters_model=ExportCadParams,
         handler=handler,
