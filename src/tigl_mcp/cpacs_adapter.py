@@ -11,6 +11,8 @@ from __future__ import annotations
 import importlib.metadata
 import json
 import logging
+import os
+import re
 import subprocess
 import tempfile
 from datetime import UTC, datetime
@@ -707,6 +709,23 @@ def _creator_label() -> str:
     return f"tigl-mcp {version}"
 
 
+#: A session id as the aircraft-runs session logs make it.
+_SESSION_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+
+
+def _session_suffix() -> str:
+    """Return ``" [session <id>]"`` when this process belongs to a session.
+
+    The aircraft-mcp gateway and the local agent put their session-log id in
+    ``AIRCRAFT_SESSION_ID`` (2026-10-08), so each ``header/updates`` entry
+    names the session whose log holds the call that made it. The CPACS schema
+    has no field for this, so it goes at the end of the modification text.
+    Outside a session the text is unchanged.
+    """
+    sid = os.environ.get("AIRCRAFT_SESSION_ID", "").strip()
+    return f" [session {sid}]" if sid and _SESSION_ID_RE.match(sid) else ""
+
+
 def _append_header_update(
     root: ET.Element, modification: str, creator: str
 ) -> ET.Element:
@@ -751,7 +770,7 @@ def _append_header_update(
     ).strip()
 
     update = ET.SubElement(updates, "update")
-    ET.SubElement(update, "modification").text = modification
+    ET.SubElement(update, "modification").text = modification + _session_suffix()
     ET.SubElement(update, "creator").text = creator
     ET.SubElement(update, "timestamp").text = datetime.now(UTC).strftime(
         "%Y-%m-%dT%H:%M:%SZ"
