@@ -14,6 +14,20 @@ from tigl_mcp.tooling import ToolDefinition
 from tigl_mcp.tools import build_tools
 
 
+def _output_schema(schema: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Pass a tool's output schema on only when it is a valid object schema.
+
+    Most tool definitions carry ``{}`` or a bare ``{"success": "boolean"}``
+    as a placeholder. MCP requires an output schema to be a JSON Schema whose
+    ``type`` is ``"object"``, and since Kiro IDE 1.4.5 (found 2026-10-20) a
+    client that validates ``tools/list`` rejects the whole server over one
+    malformed entry. Without a schema the result is still returned in full.
+    """
+    if isinstance(schema, dict) and schema.get("type") == "object":
+        return schema
+    return None
+
+
 class ToolDefinitionAdapter(Tool):
     """Expose a :class:`ToolDefinition` as a FastMCP tool."""
 
@@ -23,7 +37,7 @@ class ToolDefinitionAdapter(Tool):
             name=definition.name,
             description=definition.description,
             parameters=definition.parameters_model.model_json_schema(),
-            output_schema=definition.output_schema,
+            output_schema=_output_schema(definition.output_schema),
             tags=set(),
         )
         self._definition = definition
