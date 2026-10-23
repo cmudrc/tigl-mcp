@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from tigl_mcp.session_manager import SessionManager
 from tigl_mcp.tooling import ToolDefinition
+from tigl_mcp.tools.checks import check_geometry_tool
 from tigl_mcp.tools.configuration import (
     get_component_metadata_tool,
     get_configuration_summary_tool,
     list_geometric_components_tool,
 )
-from tigl_mcp.tools.checks import check_geometry_tool
 from tigl_mcp.tools.cpacs_io import close_cpacs_tool, open_cpacs_tool
 from tigl_mcp.tools.export import (
     export_component_mesh_tool,
