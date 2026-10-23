@@ -82,13 +82,20 @@ symmetry flags, wing/fuselage/rotor/engine counts, per-component section and
 segment counts, and the reference area and length. These are values the file
 states directly.
 
-**Requires a real kernel, and reports `GeometryUnavailable` without one.**
-Bounding boxes, wing span and area, aspect ratio, MAC, fuselage length, surface
-sampling, and plane/component intersection. Deriving any of these means
-evaluating profile geometry through the CPACS positioning and transformation
-chain, which is what TiGL is for. When no kernel is reachable these tools raise
-a structured error naming the missing dependency. They do not return an
-estimate.
+**Computed by real TiGL inside the Docker image.** Bounding boxes, wing
+spans, planform and wetted areas, fuselage length and volume come from
+`check_geometry` and the exports, which run TiGL in the `tigl-mcp:dev`
+container. Deriving any of these means evaluating profile geometry through
+the CPACS positioning and transformation chain, which is what TiGL is for.
+Without Docker these tools raise a structured error naming the missing
+dependency; nothing returns an estimate.
+
+The former `get_wing_summary`, `get_fuselage_summary`,
+`sample_component_surface`, `intersect_with_plane` and
+`intersect_components` tools were removed on 2026-10-22. They needed the
+native TiGL bindings, which no supported install provides, so they could
+only refuse; every participant of a user-study pilot saw that refusal as an
+error before the assistant found the values through `check_geometry`.
 
 > Until 2026-08-15 several of these returned values derived from a component's
 > index in an array — a wing's bounding box was literally its position in the

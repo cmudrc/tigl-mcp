@@ -88,58 +88,6 @@ def test_parameter_updates_support_relative_changes(sample_cpacs_xml: str) -> No
     assert "NOT modified" in update_result["note"]
 
 
-def test_geometry_tools_fail_loudly_without_a_kernel(
-    sample_cpacs_xml: str,
-) -> None:
-    """Geometry operations raise a structured error instead of inventing data.
-
-    These five tools previously returned numbers derived from a bounding box
-    that was itself a function of the component's array index. Under the
-    project's no-stubs rule a missing kernel must surface as an error that
-    names its dependency, so no caller can mistake an estimate for TiGL output.
-    """
-    manager = SessionManager()
-    tools = build_tools(manager)
-    open_tool = _tool_by_name(tools, "open_cpacs")
-
-    session_id = open_tool.handler(
-        {"source_type": "xml_string", "source": sample_cpacs_xml}
-    )["session_id"]
-
-    calls = {
-        "sample_component_surface": {
-            "session_id": session_id,
-            "component_uid": "W1",
-            "parameterization": "wing_component_segment_eta_xsi",
-            "samples": [{"eta": 0.5, "xsi": 0.25, "side": "left"}],
-        },
-        "intersect_with_plane": {
-            "session_id": session_id,
-            "component_uid": "W1",
-            "plane_point": {"x": 0.0, "y": 0.0, "z": 0.0},
-            "plane_normal": {"nx": 1.0, "ny": 0.0, "nz": 0.0},
-            "n_points_per_curve": 3,
-        },
-        "intersect_components": {
-            "session_id": session_id,
-            "component_uid_one": "W1",
-            "component_uid_two": "F1",
-            "n_points_per_curve": 4,
-        },
-        "get_wing_summary": {"session_id": session_id, "wing_uid": "W1"},
-        "get_fuselage_summary": {"session_id": session_id, "fuselage_uid": "F1"},
-    }
-
-    for tool_name, payload in calls.items():
-        with pytest.raises(MCPError) as excinfo:
-            _tool_by_name(tools, tool_name).handler(payload)
-
-        error = excinfo.value.to_dict()["error"]
-        assert error["type"] == "GeometryUnavailable", tool_name
-        # The error must point at the missing dependency, not just complain.
-        assert "TiGL" in str(error["details"]), tool_name
-
-
 def test_unknown_uid_still_reports_not_found(sample_cpacs_xml: str) -> None:
     """A bad UID is a NotFound, not swallowed by the geometry guard."""
     manager = SessionManager()
@@ -151,8 +99,8 @@ def test_unknown_uid_still_reports_not_found(sample_cpacs_xml: str) -> None:
     )["session_id"]
 
     with pytest.raises(MCPError) as excinfo:
-        _tool_by_name(tools, "get_wing_summary").handler(
-            {"session_id": session_id, "wing_uid": "NoSuchWing"}
+        _tool_by_name(tools, "get_component_metadata").handler(
+            {"session_id": session_id, "component_uid": "NoSuchWing"}
         )
 
     assert excinfo.value.to_dict()["error"]["type"] == "NotFound"

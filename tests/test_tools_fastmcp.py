@@ -6,7 +6,6 @@ import base64
 
 import pytest
 from fastmcp.client import Client
-from fastmcp.exceptions import ToolError
 
 from tigl_mcp import cpacs_adapter
 from tigl_mcp.fastmcp_adapter import build_fastmcp_app
@@ -105,18 +104,6 @@ async def test_fastmcp_server_exposes_export_endpoints(
         assert wing_metadata.data["wing_data"]["num_sections"] == 3
         assert wing_metadata.data["wing_data"]["num_segments"] == 2
         assert wing_metadata.data["bounding_box"] is None
-
-        # Metrics need a real kernel, so over MCP they surface as tool errors
-        # rather than plausible-looking numbers.
-        for tool_name, payload in (
-            ("get_wing_summary", {"session_id": session_id, "wing_uid": "W1"}),
-            (
-                "get_fuselage_summary",
-                {"session_id": session_id, "fuselage_uid": "F1"},
-            ),
-        ):
-            with pytest.raises(ToolError, match="without a real geometry kernel"):
-                await client.call_tool(tool_name, payload)
 
         # Exports route to real TiGL. The kernel is stubbed out here so the
         # test is deterministic on hosts with and without Docker; what is
